@@ -1,0 +1,6 @@
+{
+  "name": "VV Pixel",
+  "description": "Adaptive Pixel 10 companion utility optimizing system features, volume slider overlays, shake-to-torch, active lock widgets, and a persistent calculator widget.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

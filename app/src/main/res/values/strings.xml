@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">VV Pixel</string>
+    <string name="accessibility_desc">Enables VV Pixel widgets and double-tap gestures to securely trigger system-level lock screen action preserving face and fingerprint biometric unlocking.</string>
+</resources>

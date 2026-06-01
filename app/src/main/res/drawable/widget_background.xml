@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Sophisticated dark gradient with 75% opacity to allow launcher wallpaper to bleed glassomorphically -->
+    <gradient
+        android:startColor="#BF1C1A22"
+        android:endColor="#990E0E12"
+        android:angle="135" />
+    <corners android:radius="28dp" />
+    <!-- Ultra thin white reflection margin representing glass edge -->
+    <stroke
+        android:width="1.2dp"
+        android:color="#4DFFFFFF" />
+</shape>
