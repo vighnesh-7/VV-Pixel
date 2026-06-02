@@ -13,10 +13,31 @@ class VVPixelAccessibilityService : AccessibilityService() {
 
     private var isRegistered = false
 
+    private fun triggerFeedback() {
+        try {
+            val prefs = getSharedPreferences("com.example.vvpixel.SETTINGS", Context.MODE_PRIVATE)
+            val vibrationEnabled = prefs.getBoolean("lock_vibration_enabled", true)
+            if (vibrationEnabled) {
+                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                vibrator?.let {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        it.vibrate(android.os.VibrationEffect.createOneShot(50, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        it.vibrate(50)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error triggering lock vibration feedback", e)
+        }
+    }
+
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             Log.d(TAG, "Screen Lock broadcast received: ${intent?.action}")
             if (intent?.action == ACTION_LOCK) {
+                triggerFeedback()
                 val success = performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)
                 Log.d(TAG, "Lock screen execution result: $success")
             }
@@ -59,6 +80,7 @@ class VVPixelAccessibilityService : AccessibilityService() {
                     
                     if (isDoubleTapEnabled && diff in 80..400) {
                         Log.d(TAG, "Empty space double tap detected! Performing Lock screen global action.")
+                        triggerFeedback()
                         performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)
                     }
                     lastHomeClickTime = currentTime

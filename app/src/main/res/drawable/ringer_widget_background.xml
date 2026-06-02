@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Outer Premium Material Accent Border -->
+    <item>
+        <shape>
+            <corners android:radius="100dp" />
+            <solid android:color="#2A2D35" /> <!-- Material dark slate outline -->
+        </shape>
+    </item>
+
+    <!-- Semitranslucent Liquid Base Gradient (Glass glassomorphic fluid look) -->
+    <item android:top="1.5dp" android:bottom="1.5dp" android:left="1.5dp" android:right="1.5dp">
+        <shape>
+            <corners android:radius="100dp" />
+            <gradient
+                android:angle="270"
+                android:startColor="#4C515B"
+                android:centerColor="#23252C"
+                android:endColor="#141519"
+                android:type="linear" />
+        </shape>
+    </item>
+
+    <!-- Glossy Specular Crescent Lens Reflection Highlight (Liquid glass bubble effect) -->
+    <item android:top="2dp" android:bottom="26dp" android:left="6dp" android:right="6dp">
+        <shape>
+            <corners android:radius="100dp" />
+            <gradient
+                android:angle="270"
+                android:startColor="#80FFFFFF"
+                android:endColor="#00FFFFFF"
+                android:type="linear" />
+        </shape>
+    </item>
+
+    <!-- Soft Bottom Ambient Fluid Glow -->
+    <item android:top="22dp" android:bottom="3dp" android:left="10dp" android:right="10dp">
+        <shape>
+            <corners android:radius="100dp" />
+            <gradient
+                android:angle="90"
+                android:startColor="#25FFFFFF"
+                android:endColor="#00FFFFFF"
+                android:type="linear" />
+        </shape>
+    </item>
+</layer-list>

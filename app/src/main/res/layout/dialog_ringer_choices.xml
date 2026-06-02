@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="300dp"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:background="@drawable/ringer_widget_background"
+    android:gravity="center_horizontal"
+    android:layout_gravity="center">
+
+    <!-- Dialogue Title -->
+    <TextView
+        android:id="@+id/dialog_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Select Ringer Mode"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="18dp" />
+
+    <!-- Choice 1: Mute -->
+    <LinearLayout
+        android:id="@+id/choice_mute"
+        android:layout_width="match_parent"
+        android:layout_height="54dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:background="@drawable/ringer_btn_inactive"
+        android:clickable="true"
+        android:focusable="true"
+        android:layout_marginBottom="10dp">
+
+        <ImageView
+            android:id="@+id/icon_mute"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_mute"
+            android:tint="#FFFFFF" />
+
+        <TextView
+            android:id="@+id/text_mute"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Muted (Silent)"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="normal"
+            android:layout_marginStart="14dp" />
+    </LinearLayout>
+
+    <!-- Choice 2: Vibrate -->
+    <LinearLayout
+        android:id="@+id/choice_vibrate"
+        android:layout_width="match_parent"
+        android:layout_height="54dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:background="@drawable/ringer_btn_inactive"
+        android:clickable="true"
+        android:focusable="true"
+        android:layout_marginBottom="10dp">
+
+        <ImageView
+            android:id="@+id/icon_vibrate"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_vibrate"
+            android:tint="#FFFFFF" />
+
+        <TextView
+            android:id="@+id/text_vibrate"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Vibrate Only"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="normal"
+            android:layout_marginStart="14dp" />
+    </LinearLayout>
+
+    <!-- Choice 3: Unmute -->
+    <LinearLayout
+        android:id="@+id/choice_unmute"
+        android:layout_width="match_parent"
+        android:layout_height="54dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:background="@drawable/ringer_btn_inactive"
+        android:clickable="true"
+        android:focusable="true"
+        android:layout_marginBottom="18dp">
+
+        <ImageView
+            android:id="@+id/icon_unmute"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_unmute"
+            android:tint="#FFFFFF" />
+
+        <TextView
+            android:id="@+id/text_unmute"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Unmuted (Normal)"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="normal"
+            android:layout_marginStart="14dp" />
+    </LinearLayout>
+
+    <!-- Dismiss Text Button -->
+    <TextView
+        android:id="@+id/btn_dialog_dismiss"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Dismiss"
+        android:textColor="#D0BCFF"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:padding="10dp"
+        android:layout_gravity="end"
+        android:clickable="true"
+        android:focusable="true" />
+
+</LinearLayout>

@@ -4,6 +4,7 @@
 
     <!-- Permissions -->
     <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -83,8 +84,19 @@
 
         <service
             android:name=".VolumeTileService"
-            android:icon="@android:drawable/ic_menu_slideshow"
+            android:icon="@drawable/ic_volume_equalizer"
             android:label="Quick Volume"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".RingerModeTileService"
+            android:icon="@drawable/ic_unmute"
+            android:label="Ringer Mode"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:exported="true">
             <intent-filter>
@@ -129,6 +141,21 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/calculator_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".RingerToggleWidget"
+            android:label="VV Ringer Toggle Widget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.vvpixel.ACTION_SET_RINGER_VIBRATE" />
+                <action android:name="com.example.vvpixel.ACTION_SET_RINGER_MUTE" />
+                <action android:name="com.example.vvpixel.ACTION_SET_RINGER_UNMUTE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/ringer_widget_info" />
         </receiver>
 
     </application>

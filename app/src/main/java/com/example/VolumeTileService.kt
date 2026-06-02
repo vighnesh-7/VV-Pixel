@@ -13,6 +13,7 @@ class VolumeTileService : TileService() {
         val tile = qsTile ?: return
         tile.state = Tile.STATE_ACTIVE
         tile.label = "Quick Volume"
+        tile.icon = android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_volume_equalizer)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             tile.subtitle = "Overlay Panel"
         }

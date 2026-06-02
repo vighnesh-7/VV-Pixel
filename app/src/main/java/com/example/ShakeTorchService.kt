@@ -46,9 +46,9 @@ class ShakeTorchService : Service(), SensorEventListener {
         if (!isSensorRegistered) {
             accelerometer?.let {
                 sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
-                isSensorRegistered = true
-                Log.d(TAG, "Battery-optimized listener REGISTERED (Screen ON)")
             }
+            isSensorRegistered = true
+            Log.d(TAG, "Battery-optimized listener REGISTERED (Screen ON)")
         }
     }
 
@@ -152,7 +152,7 @@ class ShakeTorchService : Service(), SensorEventListener {
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
-        if (event == null || event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
+        if (event == null) return
 
         val currentTime = System.currentTimeMillis()
 
@@ -161,72 +161,75 @@ class ShakeTorchService : Service(), SensorEventListener {
             return
         }
 
-        val x = event.values[0] // Lateral acceleration (Left-Right)
-        val absX = kotlin.math.abs(x)
+        // Accelerometer Lateral Shake Detection (unchanged & highly optimized)
+        if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
+            val x = event.values[0] // Lateral acceleration (Left-Right)
+            val absX = kotlin.math.abs(x)
 
-        // Safe battery optimization: if resting and force is below threshold, exit immediately
-        if (shakeState == 0 && absX < SHAKE_THRESHOLD) {
-            return
-        }
+            // Safe battery optimization: if resting and force is below threshold, exit immediately
+            if (shakeState == 0 && absX < SHAKE_THRESHOLD) {
+                return
+            }
 
-        // State Machine to find 3-step sidewise oscillation: Right -> Left -> Right
-        // Phase 1: High acceleration to the Side (+X or -X)
-        // Let's analyze X axis.
-        when (shakeState) {
-            0 -> {
-                // Look for positive rightward swing
-                if (x > SHAKE_THRESHOLD) {
-                    shakeState = 1
-                    lastStateTime = currentTime
-                    Log.d(TAG, "Shake Phase 1: Swing Right detected (Accel: $x)")
-                } else if (x < -SHAKE_THRESHOLD) {
-                    // Also accept starting swing left
-                    shakeState = 10
-                    lastStateTime = currentTime
-                    Log.d(TAG, "Shake Phase 1: Swing Left detected (Accel: $x)")
+            // State Machine to find 3-step sidewise oscillation: Right -> Left -> Right
+            // Phase 1: High acceleration to the Side (+X or -X)
+            // Let's analyze X axis.
+            when (shakeState) {
+                0 -> {
+                    // Look for positive rightward swing
+                    if (x > SHAKE_THRESHOLD) {
+                        shakeState = 1
+                        lastStateTime = currentTime
+                        Log.d(TAG, "Shake Phase 1: Swing Right detected (Accel: $x)")
+                    } else if (x < -SHAKE_THRESHOLD) {
+                        // Also accept starting swing left
+                        shakeState = 10
+                        lastStateTime = currentTime
+                        Log.d(TAG, "Shake Phase 1: Swing Left detected (Accel: $x)")
+                    }
                 }
-            }
-            1 -> {
-                // State 1 was Swing Right. Next step must be Swing Left within time.
-                if (currentTime - lastStateTime > WINDOW_SIZE) {
-                    // Reset to idle on timeout
-                    shakeState = 0
-                } else if (x < -SHAKE_THRESHOLD) {
-                    shakeState = 2
-                    lastStateTime = currentTime
-                    Log.d(TAG, "Shake Phase 2: Swing Left detected (Accel: $x)")
+                1 -> {
+                    // State 1 was Swing Right. Next step must be Swing Left within time.
+                    if (currentTime - lastStateTime > WINDOW_SIZE) {
+                        // Reset to idle on timeout
+                        shakeState = 0
+                    } else if (x < -SHAKE_THRESHOLD) {
+                        shakeState = 2
+                        lastStateTime = currentTime
+                        Log.d(TAG, "Shake Phase 2: Swing Left detected (Accel: $x)")
+                    }
                 }
-            }
-            2 -> {
-                // State 2 was Swing Left. Final step must be Swing Right within time.
-                if (currentTime - lastStateTime > WINDOW_SIZE) {
-                    shakeState = 0
-                } else if (x > SHAKE_THRESHOLD) {
-                    Log.d(TAG, "Shake Phase 3: Swing Right detected (Accel: $x) -> Triggering Torch!")
-                    triggerTorchToggle()
-                    shakeState = 0
-                    lastTriggerTime = currentTime
+                2 -> {
+                    // State 2 was Swing Left. Final step must be Swing Right within time.
+                    if (currentTime - lastStateTime > WINDOW_SIZE) {
+                        shakeState = 0
+                    } else if (x > SHAKE_THRESHOLD) {
+                        Log.d(TAG, "Shake Phase 3: Swing Right detected (Accel: $x) -> Triggering Torch!")
+                        triggerTorchToggle()
+                        shakeState = 0
+                        lastTriggerTime = currentTime
+                    }
                 }
-            }
-            10 -> {
-                // State 10 was Swing Left. Next step must be Swing Right within time.
-                if (currentTime - lastStateTime > WINDOW_SIZE) {
-                    shakeState = 0
-                } else if (x > SHAKE_THRESHOLD) {
-                    shakeState = 11
-                    lastStateTime = currentTime
-                    Log.d(TAG, "Shake Phase 2: Swing Right detected (Accel: $x)")
+                10 -> {
+                    // State 10 was Swing Left. Next step must be Swing Right within time.
+                    if (currentTime - lastStateTime > WINDOW_SIZE) {
+                        shakeState = 0
+                    } else if (x > SHAKE_THRESHOLD) {
+                        shakeState = 11
+                        lastStateTime = currentTime
+                        Log.d(TAG, "Shake Phase 2: Swing Right detected (Accel: $x)")
+                    }
                 }
-            }
-            11 -> {
-                // State 11 was Swing Right. Final step must be Swing Left within time.
-                if (currentTime - lastStateTime > WINDOW_SIZE) {
-                    shakeState = 0
-                } else if (x < -SHAKE_THRESHOLD) {
-                    Log.d(TAG, "Shake Phase 3: Swing Left detected (Accel: $x) -> Triggering Torch!")
-                    triggerTorchToggle()
-                    shakeState = 0
-                    lastTriggerTime = currentTime
+                11 -> {
+                    // State 11 was Swing Right. Final step must be Swing Left within time.
+                    if (currentTime - lastStateTime > WINDOW_SIZE) {
+                        shakeState = 0
+                    } else if (x < -SHAKE_THRESHOLD) {
+                        Log.d(TAG, "Shake Phase 3: Swing Left detected (Accel: $x) -> Triggering Torch!")
+                        triggerTorchToggle()
+                        shakeState = 0
+                        lastTriggerTime = currentTime
+                    }
                 }
             }
         }

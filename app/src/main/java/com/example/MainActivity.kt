@@ -94,7 +94,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                         CenterAlignedTopAppBar(
                             title = {
                                 Text(
-                                    "Pixel Enhancer",
+                                    "VV Pixel Enhancer",
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.SansSerif
                                 )
@@ -162,6 +162,16 @@ fun DashboardScreen(
     // Permission States
     var hasWriteSettings by remember { mutableStateOf(Settings.System.canWrite(context)) }
     var hasOverlayPermission by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    var hasDndPermission by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+                notificationManager?.isNotificationPolicyAccessGranted == true
+            } else {
+                true
+            }
+        )
+    }
     var hasNotificationPermission by remember {
         mutableStateOf(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -174,6 +184,7 @@ fun DashboardScreen(
 
     val sharedPrefs = remember(context) { context.getSharedPreferences("com.example.vvpixel.SETTINGS", Context.MODE_PRIVATE) }
     var isDoubleTapEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("double_tap_to_lock_enabled", true)) }
+    var isLockVibrationEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("lock_vibration_enabled", true)) }
     var isShakeTorchEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("shake_torch_enabled", true)) }
 
     // Checking of background services state
@@ -198,6 +209,13 @@ fun DashboardScreen(
                 hasOverlayPermission = Settings.canDrawOverlays(context)
                 isAccessibilityRunning = VVPixelAccessibilityService.isServiceRunning || isAccessibilityServiceEnabled(context)
                 isShakeTorchRunning = ShakeTorchService.isServiceRunning
+                
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+                    hasDndPermission = nm?.isNotificationPolicyAccessGranted == true
+                } else {
+                    hasDndPermission = true
+                }
                 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     hasNotificationPermission = ContextCompat.checkSelfPermission(
@@ -281,6 +299,22 @@ fun DashboardScreen(
                 }
             )
 
+            // Subtle Vibration Feedback Toggle
+            PixelEnhancerCard(
+                title = "Subtle Gesture/Widget Vibration",
+                subtitle = "Vibrate mildly when lock triggers are fired",
+                icon = Icons.Default.Notifications,
+                rightElement = {
+                    Switch(
+                        checked = isLockVibrationEnabled,
+                        onCheckedChange = { enable ->
+                            isLockVibrationEnabled = enable
+                            sharedPrefs.edit().putBoolean("lock_vibration_enabled", enable).apply()
+                        }
+                    )
+                }
+            )
+
             // Lock Widget 1x1
             PixelEnhancerCard(
                 title = "Lock Widget",
@@ -293,8 +327,8 @@ fun DashboardScreen(
                         },
                         shape = RoundedCornerShape(24.dp),
                         colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = Color(0xFFE8DEF8),
-                            contentColor = Color(0xFF4F378B)
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                         ),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                     ) {
@@ -365,8 +399,32 @@ fun DashboardScreen(
                         },
                         shape = RoundedCornerShape(24.dp),
                         colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = Color(0xFFE8DEF8),
-                            contentColor = Color(0xFF4F378B)
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text("Add", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Ringer Toggle Widget
+            PixelEnhancerCard(
+                title = "Unmute/Mute/Vibrate Widget",
+                subtitle = "One-tap homescreen sound state switcher",
+                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_volume_equalizer),
+                rightElement = {
+                    FilledTonalButton(
+                        onClick = {
+                            requestPinWidget(RingerToggleWidget::class.java, "Volume Switcher")
+                        },
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                         ),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                     ) {
@@ -521,6 +579,20 @@ fun DashboardScreen(
                         )
 
                         PermissionItem(
+                            title = "Mute Mode (DND) Access",
+                            description = "Required to switch the system into total mute (silent) mode.",
+                            isGranted = hasDndPermission,
+                            onRequestGrant = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                    val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                                    context.startActivity(intent)
+                                } else {
+                                    Toast.makeText(context, "Mute mode is fully supported.", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        )
+
+                        PermissionItem(
                             title = "Overlay Sliders",
                             description = "Required to display custom volume overlays.",
                             isGranted = hasOverlayPermission,
@@ -555,14 +627,15 @@ fun DashboardScreen(
 fun PixelEnhancerCard(
     title: String,
     subtitle: String,
-    icon: ImageVector,
+    icon: ImageVector? = null,
+    iconPainter: androidx.compose.ui.graphics.painter.Painter? = null,
     rightElement: @Composable () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFF3EDF7) // Matches precise Material 3 light tint background from Image 2
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
         Row(
@@ -577,15 +650,24 @@ fun PixelEnhancerCard(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFE8DEF8)),
+                    .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = Color(0xFF4F378B),
-                    modifier = Modifier.size(24.dp)
-                )
+                if (iconPainter != null) {
+                    Icon(
+                        painter = iconPainter,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(24.dp)
+                    )
+                } else if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.width(16.dp))
@@ -598,13 +680,13 @@ fun PixelEnhancerCard(
                     text = title,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1D1B20)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 )
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = Color(0xFF49454F)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 )
             }

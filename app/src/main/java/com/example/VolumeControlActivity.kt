@@ -18,8 +18,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -219,7 +220,7 @@ fun VolumeOverlayScreen(
                 // Slider Row - Media
                 VolumeSliderItem(
                     title = "Media",
-                    icon = Icons.Default.PlayArrow,
+                    icon = Icons.Filled.MusicNote,
                     current = currentMedia,
                     max = maxMedia,
                     onValueChange = { onVolumeChanged(AudioManager.STREAM_MUSIC, it) }
@@ -230,7 +231,7 @@ fun VolumeOverlayScreen(
                 // Slider Row - Ring
                 VolumeSliderItem(
                     title = "Ringtone",
-                    icon = Icons.Default.Notifications,
+                    icon = Icons.Filled.VolumeUp,
                     current = currentRing,
                     max = maxRing,
                     onValueChange = { onVolumeChanged(AudioManager.STREAM_RING, it) }
@@ -242,7 +243,7 @@ fun VolumeOverlayScreen(
                 if (maxNotification > 0) {
                     VolumeSliderItem(
                         title = "Notifications",
-                        icon = Icons.Default.Notifications,
+                        icon = Icons.Filled.Notifications,
                         current = currentNotification,
                         max = maxNotification,
                         onValueChange = { onVolumeChanged(AudioManager.STREAM_NOTIFICATION, it) }
@@ -253,7 +254,7 @@ fun VolumeOverlayScreen(
                 // Slider Row - Alarm
                 VolumeSliderItem(
                     title = "Alarm",
-                    icon = Icons.Default.Star,
+                    icon = Icons.Filled.Alarm,
                     current = currentAlarm,
                     max = maxAlarm,
                     onValueChange = { onVolumeChanged(AudioManager.STREAM_ALARM, it) }

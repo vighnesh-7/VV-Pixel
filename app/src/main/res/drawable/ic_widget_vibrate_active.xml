@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Star/flower organic active indicator in crisp white -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40.0,18.4 l-3.86,-3.86 2.24,-5.46 -5.46,-2.24L33.06,3.0 24.0,6.86 14.94,3.0 11.08,6.86 5.62,9.1 l2.24,5.46L4.0,18.46l3.86,5.06 -2.24,5.46 5.46,2.24L14.94,43.0 24.0,39.14 33.06,43.0l3.86,-3.86 5.46,-2.24 -2.24,-5.46L44.0,27.62l-3.86,-5.06L44.0,18.4z" />
+    <!-- Rich deep purple inner icon for strong contrast -->
+    <group android:translateX="12" android:translateY="12">
+        <path
+            android:fillColor="#581C87"
+            android:pathData="M16,4H8C6.9,4 6,4.9 6,6v12c0,1.1 0.9,2 2,2h8c1.1,0 2,-0.9 2,-2V6C18,4.9 17.1,4 16,4zM14,18h-4v-1h4V18zM16,15H8V6h8V15z M3,7H1v10h2V7z M21,7h2v10h-2V7z" />
+    </group>
+</vector>

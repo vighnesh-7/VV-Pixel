@@ -3,7 +3,8 @@
     android:id="@+id/widget_double_tap_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="4dp"
+    android:padding="0dp"
+    android:background="@android:color/transparent"
     android:layout_gravity="center">
 
     <LinearLayout
@@ -11,14 +12,15 @@
         android:layout_height="match_parent"
         android:gravity="center"
         android:orientation="vertical"
-        android:background="@drawable/double_tap_zone_background">
+        android:background="@android:color/transparent">
 
         <ImageView
             android:layout_width="16dp"
             android:layout_height="16dp"
             android:src="@android:drawable/ic_secure"
             android:contentDescription="Double Tap Lock Icon"
-            android:alpha="0.6"/>
+            android:visibility="gone"
+            android:alpha="0.0"/>
 
         <TextView
             android:layout_width="wrap_content"
@@ -26,7 +28,8 @@
             android:text="Lock"
             android:textSize="9dp"
             android:textColor="#FFFFFF"
-            android:alpha="0.6"
+            android:visibility="gone"
+            android:alpha="0.0"
             android:textStyle="normal" />
     </LinearLayout>
 

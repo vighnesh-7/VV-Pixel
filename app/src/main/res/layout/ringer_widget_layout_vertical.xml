@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:id="@+id/widget_ringer_main_vertical"
+    android:padding="6dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center"
+        android:background="@drawable/ringer_widget_background"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp">
+
+        <!-- Position 1: Mute (Silent) -->
+        <FrameLayout
+            android:id="@+id/btn_ringer_mute"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clickable="true"
+            android:focusable="true">
+
+            <FrameLayout
+                android:id="@+id/img_ringer_mute_active"
+                android:layout_width="54dp"
+                android:layout_height="54dp"
+                android:layout_gravity="center"
+                android:background="@drawable/ringer_btn_active"
+                android:padding="11dp"
+                android:visibility="gone">
+                <ImageView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:src="@drawable/ic_mute"
+                    android:tint="#1D1B20" />
+            </FrameLayout>
+
+            <ImageView
+                android:id="@+id/img_ringer_mute_dot"
+                android:layout_width="54dp"
+                android:layout_height="54dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_mute"
+                android:tint="#B3E2E3E9"
+                android:padding="11dp"
+                android:visibility="visible" />
+        </FrameLayout>
+
+        <!-- Position 2: Vibrate -->
+        <FrameLayout
+            android:id="@+id/btn_ringer_vibrate"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clickable="true"
+            android:focusable="true">
+
+            <FrameLayout
+                android:id="@+id/img_ringer_vibrate_active"
+                android:layout_width="54dp"
+                android:layout_height="54dp"
+                android:layout_gravity="center"
+                android:background="@drawable/ringer_btn_active"
+                android:padding="11dp"
+                android:visibility="gone">
+                <ImageView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:src="@drawable/ic_vibrate"
+                    android:tint="#1D1B20" />
+            </FrameLayout>
+
+            <ImageView
+                android:id="@+id/img_ringer_vibrate_dot"
+                android:layout_width="54dp"
+                android:layout_height="54dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_vibrate"
+                android:tint="#B3E2E3E9"
+                android:padding="11dp"
+                android:visibility="visible" />
+        </FrameLayout>
+
+        <!-- Position 3: Unmute (Normal Ringer) -->
+        <FrameLayout
+            android:id="@+id/btn_ringer_unmute"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clickable="true"
+            android:focusable="true">
+
+            <FrameLayout
+                android:id="@+id/img_ringer_unmute_active"
+                android:layout_width="54dp"
+                android:layout_height="54dp"
+                android:layout_gravity="center"
+                android:background="@drawable/ringer_btn_active"
+                android:padding="11dp"
+                android:visibility="gone">
+                <ImageView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:src="@drawable/ic_unmute"
+                    android:tint="#1D1B20" />
+            </FrameLayout>
+
+            <ImageView
+                android:id="@+id/img_ringer_unmute_dot"
+                android:layout_width="54dp"
+                android:layout_height="54dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_unmute"
+                android:tint="#B3E2E3E9"
+                android:padding="11dp"
+                android:visibility="visible" />
+        </FrameLayout>
+
+    </LinearLayout>
+</FrameLayout>
