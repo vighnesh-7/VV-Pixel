@@ -7,4 +7,29 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Widget system light colors -->
+    <color name="widget_bg_start">#F0F4F8</color>
+    <color name="widget_bg_end">#DCE5EE</color>
+    <color name="widget_outline">#80B3BAC1</color>
+    <color name="widget_btn_active_bg">#FF005FAF</color>
+    <color name="widget_btn_active_icon">#FFFFFFFF</color>
+    <color name="widget_btn_inactive_icon">#80141519</color>
+    <color name="widget_btn_inactive_bg">#14000000</color>
+
+    <!-- Dialog light colors -->
+    <color name="dialog_bg_start">#E6F0F4F8</color>
+    <color name="dialog_bg_end">#E6DCE5EE</color>
+    <color name="dialog_outline">#33B3BAC1</color>
+    <color name="dialog_text_color">#FF1D1B20</color>
+    <color name="dialog_btn_dismiss_color">#FF005FAF</color>
+
+    <!-- Ringer Widget Premium Colors (Light mode solid opaque) -->
+    <color name="ringer_glass_bg_start">#FFF0F4F8</color>
+    <color name="ringer_glass_bg_end">#FFDCE5EE</color>
+    <color name="ringer_glass_outline">#FFB3BAC1</color>
+
+    <!-- Lock Widget Fallback Colors -->
+    <color name="lock_widget_bg">#FFE8DEF8</color>
+    <color name="lock_widget_icon">#FF4F378B</color>
 </resources>

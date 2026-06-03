@@ -18,13 +18,22 @@ class VVPixelAccessibilityService : AccessibilityService() {
             val prefs = getSharedPreferences("com.example.vvpixel.SETTINGS", Context.MODE_PRIVATE)
             val vibrationEnabled = prefs.getBoolean("lock_vibration_enabled", true)
             if (vibrationEnabled) {
+                val intensity = prefs.getFloat("lock_vibration_intensity", 0.5f)
+                val duration = (10 + (intensity * 40)).toLong() // 10ms to 50ms (subtle locks are shorter)
                 val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
                 vibrator?.let {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        it.vibrate(android.os.VibrationEffect.createOneShot(50, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                        val amplitude = (50 + (intensity * 205)).toInt().coerceIn(1, 255)
+                        try {
+                            it.vibrate(android.os.VibrationEffect.createOneShot(duration, amplitude))
+                        } catch (e: Exception) {
+                            try { it.vibrate(duration) } catch (ex: Exception) {}
+                        }
                     } else {
                         @Suppress("DEPRECATION")
-                        it.vibrate(50)
+                        try {
+                            it.vibrate(duration)
+                        } catch (ex: Exception) {}
                     }
                 }
             }

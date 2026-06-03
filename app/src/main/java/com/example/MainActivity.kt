@@ -172,15 +172,7 @@ fun DashboardScreen(
             }
         )
     }
-    var hasNotificationPermission by remember {
-        mutableStateOf(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-            } else {
-                true
-            }
-        )
-    }
+
 
     val sharedPrefs = remember(context) { context.getSharedPreferences("com.example.vvpixel.SETTINGS", Context.MODE_PRIVATE) }
     var isDoubleTapEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("double_tap_to_lock_enabled", true)) }
@@ -193,12 +185,7 @@ fun DashboardScreen(
     }
     var isShakeTorchRunning by remember { mutableStateOf(ShakeTorchService.isServiceRunning) }
 
-    // Launcher for Notification permission (Android 13+)
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        hasNotificationPermission = isGranted
-    }
+
 
     // Refresh states instantly when window becomes active/resumed
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -217,12 +204,7 @@ fun DashboardScreen(
                     hasDndPermission = true
                 }
                 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    hasNotificationPermission = ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.POST_NOTIFICATIONS
-                    ) == PackageManager.PERMISSION_GRANTED
-                }
+
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -273,49 +255,29 @@ fun DashboardScreen(
                 modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
             )
 
-            // Double Tap to Lock
+            // Double Tap to Lock Card (First)
             PixelEnhancerCard(
                 title = "Double-Tap to Lock",
-                subtitle = if (isAccessibilityRunning) {
-                    if (isDoubleTapEnabled) "Active — double-tap empty areas to lock" else "Disabled — double-tap empty areas to lock"
-                } else {
-                    "Inactive — tap to open Accessibility setup"
-                },
+                subtitle = "Pins the lock launcher. Double-tap to secure device instantly.",
                 icon = Icons.Default.Lock,
                 rightElement = {
-                    Switch(
-                        checked = isDoubleTapEnabled && isAccessibilityRunning,
-                        onCheckedChange = { enable ->
-                            if (!isAccessibilityRunning) {
-                                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                                context.startActivity(intent)
-                                Toast.makeText(context, "Please enable the VV Pixel Lock Helper service", Toast.LENGTH_LONG).show()
-                            } else {
-                                isDoubleTapEnabled = enable
-                                sharedPrefs.edit().putBoolean("double_tap_to_lock_enabled", enable).apply()
-                            }
-                        }
-                    )
+                    FilledTonalButton(
+                        onClick = {
+                            requestPinWidget(DoubleTapLockWidget::class.java, "Double-Tap to Lock")
+                        },
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text("Add", style = MaterialTheme.typography.labelLarge)
+                    }
                 }
             )
 
-            // Subtle Vibration Feedback Toggle
-            PixelEnhancerCard(
-                title = "Subtle Gesture/Widget Vibration",
-                subtitle = "Vibrate mildly when lock triggers are fired",
-                icon = Icons.Default.Notifications,
-                rightElement = {
-                    Switch(
-                        checked = isLockVibrationEnabled,
-                        onCheckedChange = { enable ->
-                            isLockVibrationEnabled = enable
-                            sharedPrefs.edit().putBoolean("lock_vibration_enabled", enable).apply()
-                        }
-                    )
-                }
-            )
-
-            // Lock Widget 1x1
+            // Lock Widget 1x1 (Second)
             PixelEnhancerCard(
                 title = "Lock Widget",
                 subtitle = "Long-press homescreen → Widgets",
@@ -336,12 +298,111 @@ fun DashboardScreen(
                     }
                 }
             )
+
+            // Subtle Vibration Lock with Slider (Third)
+            var lockVibrationIntensity by remember { mutableStateOf(sharedPrefs.getFloat("lock_vibration_intensity", 0.5f)) }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.secondaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Subtle Vibration Lock",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            )
+                            Text(
+                                text = "Vibrate mildly when lock triggers are fired",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                )
+                            )
+                        }
+                        Switch(
+                            checked = isLockVibrationEnabled,
+                            onCheckedChange = { enable ->
+                                isLockVibrationEnabled = enable
+                                sharedPrefs.edit().putBoolean("lock_vibration_enabled", enable).apply()
+                            }
+                        )
+                    }
+
+                    if (isLockVibrationEnabled) {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Vibration Intensity",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = when {
+                                        lockVibrationIntensity < 0.35f -> "Mild"
+                                        lockVibrationIntensity < 0.7f -> "Medium"
+                                        else -> "Strong"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Slider(
+                                value = lockVibrationIntensity,
+                                onValueChange = { newValue ->
+                                    lockVibrationIntensity = newValue
+                                    sharedPrefs.edit().putFloat("lock_vibration_intensity", newValue).apply()
+                                },
+                                valueRange = 0.1f..1.0f,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // ================= SECTION 2: QUICK SETTINGS =================
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
-                text = "Quick Settings",
+                text = "Quick Settings Tiles",
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -349,30 +410,32 @@ fun DashboardScreen(
                 modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
             )
 
-            // Volume QS Tile
-            PixelEnhancerCard(
+            // Tile Info Item 1: Refresh Rate
+            PixelEnhancerTileInfoCard(
+                title = "Refresh Rate (Hz) Tile",
+                subtitle = "Instantly toggle Smooth display (120Hz) vs Standard (60Hz)",
+                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_refresh_rate)
+            )
+
+            // Tile Info Item 2: Ringer Mode
+            PixelEnhancerTileInfoCard(
+                title = "Ringer Mode Tile",
+                subtitle = "Tap to cycle through Sound, Vibrate, and Silent modes",
+                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_unmute)
+            )
+
+            // Tile Info Item 3: Adaptive Brightness
+            PixelEnhancerTileInfoCard(
+                title = "Adaptive Brightness Tile",
+                subtitle = "Automatically calibrate and match ambient screen luminance levels",
+                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_brightness_auto)
+            )
+
+            // Tile Info Item 4: Volume QS Tile
+            PixelEnhancerTileInfoCard(
                 title = "Volume QS Tile",
-                subtitle = "Active — tap to test volume slider board",
-                icon = Icons.Default.Notifications,
-                rightElement = {
-                    Switch(
-                        checked = hasOverlayPermission,
-                        onCheckedChange = { enable ->
-                            if (!hasOverlayPermission) {
-                                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                                    data = Uri.parse("package:${context.packageName}")
-                                }
-                                context.startActivity(intent)
-                                Toast.makeText(context, "Overlay Permission required first", Toast.LENGTH_SHORT).show()
-                            } else {
-                                val intent = Intent(context, VolumeControlActivity::class.java).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                                }
-                                context.startActivity(intent)
-                            }
-                        }
-                    )
-                }
+                subtitle = "Tap to expand a custom visual slider board for media and ring levels",
+                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_volume_equalizer)
             )
         }
 
@@ -411,11 +474,11 @@ fun DashboardScreen(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Ringer Toggle Widget
+            // Ringer Toggle Widget (Now with semantic unmute bell icon)
             PixelEnhancerCard(
                 title = "Unmute/Mute/Vibrate Widget",
                 subtitle = "One-tap homescreen sound state switcher",
-                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_volume_equalizer),
+                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_unmute),
                 rightElement = {
                     FilledTonalButton(
                         onClick = {
@@ -445,11 +508,11 @@ fun DashboardScreen(
                 modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
             )
 
-            // Shake to Toggle Torch Card
+            // Shake to Toggle Torch Card (Now using semantic flashlight Lightbulb icon)
             PixelEnhancerCard(
                 title = "Shake to Toggle Torch",
                 subtitle = if (isShakeTorchRunning && isShakeTorchEnabled) "Active — shake to toggle" else "Disabled — shake to toggle",
-                icon = Icons.Default.Refresh,
+                icon = Icons.Default.Lightbulb,
                 rightElement = {
                     Switch(
                         checked = isShakeTorchEnabled && isShakeTorchRunning,
@@ -471,6 +534,8 @@ fun DashboardScreen(
 
             // Interactive Shake Force Visualizer
             AnimatedVisibility(visible = isShakeTorchEnabled && isShakeTorchRunning) {
+                var shakeThreshold by remember { mutableStateOf(sharedPrefs.getFloat("shake_torch_threshold", 12.0f)) }
+
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -499,20 +564,37 @@ fun DashboardScreen(
                                 modifier = Modifier
                                     .fillMaxHeight()
                                     .fillMaxWidth(widthPercentage)
-                                    .background(if (abs(sensorX) > 12.0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary)
+                                    .background(if (abs(sensorX) > shakeThreshold) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary)
                             )
                         }
+
+                        Text(
+                            text = "Shake Threshold Intensity: ${String.format("%.1f m/s²", shakeThreshold)}",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                        Slider(
+                            value = shakeThreshold,
+                            onValueChange = { newValue ->
+                                shakeThreshold = newValue
+                                sharedPrefs.edit().putFloat("shake_torch_threshold", newValue).apply()
+                            },
+                            valueRange = 8.0f..22.0f,
+                            steps = 14
+                        )
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Current: ${String.format("%.2f m/s²", sensorX)}",
+                                text = "Current Accel: ${String.format("%.2f m/s²", sensorX)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
                             )
                             Text(
-                                text = "Trigger Target: 12.00 m/s²",
+                                text = "Trigger Target: ${String.format("%.2f m/s²", shakeThreshold)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
                             )
@@ -567,8 +649,8 @@ fun DashboardScreen(
                         Divider()
 
                         PermissionItem(
-                            title = "System Brightness Write",
-                            description = "Required to adjust brightness values.",
+                            title = "System Settings Writer",
+                            description = "Required to adjust screen brightness and toggle high smooth refresh rates (60Hz / 120Hz).",
                             isGranted = hasWriteSettings,
                             onRequestGrant = {
                                 val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
@@ -604,22 +686,31 @@ fun DashboardScreen(
                             }
                         )
 
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            PermissionItem(
-                                title = "Post Notifications",
-                                description = "Required for single-swipe brightness overlay.",
-                                isGranted = hasNotificationPermission,
-                                onRequestGrant = {
-                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                }
-                            )
-                        }
+
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Author subtle watermark
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(end = 4.dp, bottom = 8.dp),
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Text(
+                text = " - V_Vighnesh😉",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontFamily = FontFamily.Monospace
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+        }
+
     }
 }
 
@@ -746,3 +837,63 @@ fun PermissionItem(
         }
     }
 }
+
+@Composable
+fun PixelEnhancerTileInfoCard(
+    title: String,
+    subtitle: String,
+    iconPainter: androidx.compose.ui.graphics.painter.Painter
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Left: Squircle Icon container with secondaryContainer tint (matches systems theme alignment)
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = iconPainter,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            // Middle: Text details
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                    )
+                )
+            }
+        }
+    }
+}
+

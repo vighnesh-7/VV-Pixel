@@ -38,7 +38,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:src="@drawable/ic_mute"
-                    android:tint="#1D1B20" />
+                    android:tint="@color/widget_btn_active_icon" />
             </FrameLayout>
 
             <ImageView
@@ -47,7 +47,7 @@
                 android:layout_height="54dp"
                 android:layout_gravity="center"
                 android:src="@drawable/ic_mute"
-                android:tint="#B3E2E3E9"
+                android:tint="@color/widget_btn_inactive_icon"
                 android:padding="11dp"
                 android:visibility="visible" />
         </FrameLayout>
@@ -73,7 +73,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:src="@drawable/ic_vibrate"
-                    android:tint="#1D1B20" />
+                    android:tint="@color/widget_btn_active_icon" />
             </FrameLayout>
 
             <ImageView
@@ -82,7 +82,7 @@
                 android:layout_height="54dp"
                 android:layout_gravity="center"
                 android:src="@drawable/ic_vibrate"
-                android:tint="#B3E2E3E9"
+                android:tint="@color/widget_btn_inactive_icon"
                 android:padding="11dp"
                 android:visibility="visible" />
         </FrameLayout>
@@ -108,7 +108,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:src="@drawable/ic_unmute"
-                    android:tint="#1D1B20" />
+                    android:tint="@color/widget_btn_active_icon" />
             </FrameLayout>
 
             <ImageView
@@ -117,7 +117,7 @@
                 android:layout_height="54dp"
                 android:layout_gravity="center"
                 android:src="@drawable/ic_unmute"
-                android:tint="#B3E2E3E9"
+                android:tint="@color/widget_btn_inactive_icon"
                 android:padding="11dp"
                 android:visibility="visible" />
         </FrameLayout>

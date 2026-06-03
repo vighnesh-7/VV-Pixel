@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget system dark colors -->
+    <color name="widget_bg_start">#20242E</color>
+    <color name="widget_bg_end">#101217</color>
+    <color name="widget_outline">#803D4352</color>
+    <color name="widget_btn_active_bg">#FFD0BCFF</color>
+    <color name="widget_btn_active_icon">#FF1D1B20</color>
+    <color name="widget_btn_inactive_icon">#80E2E3E9</color>
+    <color name="widget_btn_inactive_bg">#1AFFFFFF</color>
+
+    <!-- Dialog dark colors -->
+    <color name="dialog_bg_start">#E620242E</color>
+    <color name="dialog_bg_end">#E6101217</color>
+    <color name="dialog_outline">#333D4352</color>
+    <color name="dialog_text_color">#FFFFFFFF</color>
+    <color name="dialog_btn_dismiss_color">#FFD0BCFF</color>
+
+    <!-- Ringer Widget Premium Colors (Dark mode solid opaque) -->
+    <color name="ringer_glass_bg_start">#FF20242E</color>
+    <color name="ringer_glass_bg_end">#FF101217</color>
+    <color name="ringer_glass_outline">#803D4352</color>
+
+    <!-- Lock Widget Dark Fallback Colors -->
+    <color name="lock_widget_bg">#FF31204F</color>
+    <color name="lock_widget_icon">#FFD0BCFF</color>
+</resources>

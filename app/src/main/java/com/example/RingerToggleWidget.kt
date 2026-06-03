@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
+import android.os.Build
 import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
@@ -37,8 +38,11 @@ class RingerToggleWidget : AppWidgetProvider() {
 
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
+        var actionMatched = false
+
         when (action) {
             ACTION_SET_RINGER_VIBRATE -> {
+                actionMatched = true
                 try {
                     audioManager.ringerMode = AudioManager.RINGER_MODE_VIBRATE
                 } catch (e: Exception) {
@@ -46,23 +50,31 @@ class RingerToggleWidget : AppWidgetProvider() {
                 }
             }
             ACTION_SET_RINGER_MUTE -> {
+                actionMatched = true
                 try {
-                    audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
-                } catch (e: SecurityException) {
-                    Log.e(TAG, "Error setting silent (requires DND permissions), falling back to vibrate", e)
-                    android.widget.Toast.makeText(
-                        context,
-                        "Mute mode requires Do Not Disturb permission. Grant it in VV Pixel Enhancer app's Setup list.",
-                        android.widget.Toast.LENGTH_LONG
-                    ).show()
-                    try {
+                    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+                    val hasDnd = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        nm?.isNotificationPolicyAccessGranted == true
+                    } else {
+                        true
+                    }
+
+                    if (hasDnd) {
+                        audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
+                    } else {
                         audioManager.ringerMode = AudioManager.RINGER_MODE_VIBRATE
-                    } catch (ex: Exception) {}
+                        android.widget.Toast.makeText(
+                             context,
+                             "Mute requires DND permission. Toggled Vibrate instead. Grant Mute mode in VV Pixel setup.",
+                             android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error setting silent", e)
                 }
             }
             ACTION_SET_RINGER_UNMUTE -> {
+                actionMatched = true
                 try {
                     audioManager.ringerMode = AudioManager.RINGER_MODE_NORMAL
                 } catch (e: Exception) {
@@ -71,12 +83,39 @@ class RingerToggleWidget : AppWidgetProvider() {
             }
         }
 
+        if (actionMatched) {
+            triggerVibration(context)
+        }
+
         // Update all ringer widgets
         val appWidgetManager = AppWidgetManager.getInstance(context)
         val thisWidget = ComponentName(context, RingerToggleWidget::class.java)
         val allIds = appWidgetManager.getAppWidgetIds(thisWidget)
         for (id in allIds) {
             updateWidget(context, appWidgetManager, id)
+        }
+    }
+
+    private fun triggerVibration(context: Context) {
+        try {
+            val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+            if (vibrator != null) {
+                val sharedPrefs = context.getSharedPreferences("com.example.vvpixel.SETTINGS", Context.MODE_PRIVATE)
+                val vibrationEnabled = sharedPrefs.getBoolean("lock_vibration_enabled", true)
+                val intensity = sharedPrefs.getFloat("lock_vibration_intensity", 0.5f)
+                if (vibrationEnabled) {
+                    val duration = (15 + (intensity * 40)).toLong() // 15ms to 55ms
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val amplitude = (50 + (intensity * 205)).toInt().coerceIn(1, 255)
+                        vibrator.vibrate(android.os.VibrationEffect.createOneShot(duration, amplitude))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        vibrator.vibrate(duration)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error triggering custom ringer widget feedback vibration", e)
         }
     }
 
@@ -91,8 +130,8 @@ class RingerToggleWidget : AppWidgetProvider() {
             val minWidth = options.getInt("appWidgetMinWidth")
             val minHeight = options.getInt("appWidgetMinHeight")
 
-            // Dynamic layout switching: If height exceeds width, render in vertical stack
-            val isVertical = minHeight > minWidth && minWidth > 0
+            // Dynamic layout switching: If height exceeds width or narrow/tall, render in vertical stack
+            val isVertical = (minHeight > minWidth || (minWidth < 140 && minHeight >= 100)) && minWidth > 0
             val layoutId = if (isVertical) {
                 R.layout.ringer_widget_layout_vertical
             } else {

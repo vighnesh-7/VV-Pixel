@@ -63,7 +63,10 @@ class ShakeTorchService : Service(), SensorEventListener {
 
     // Shake State Machine for Lateral Oscillation (sidewise Right -> Left -> Right)
     // Thresholds
-    private val SHAKE_THRESHOLD = 12.0f    // Lateral peak threshold (m/s^2)
+    private fun getShakeThreshold(): Float {
+        val prefs = getSharedPreferences("com.example.vvpixel.SETTINGS", Context.MODE_PRIVATE)
+        return prefs.getFloat("shake_torch_threshold", 12.0f)
+    }
     private val WINDOW_SIZE = 450L        // Match window between stages in ms
     private val COOLDOWN_TIME = 1000L      // Cooldown after trigger in ms
 
@@ -165,9 +168,10 @@ class ShakeTorchService : Service(), SensorEventListener {
         if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
             val x = event.values[0] // Lateral acceleration (Left-Right)
             val absX = kotlin.math.abs(x)
+            val currentThreshold = getShakeThreshold()
 
             // Safe battery optimization: if resting and force is below threshold, exit immediately
-            if (shakeState == 0 && absX < SHAKE_THRESHOLD) {
+            if (shakeState == 0 && absX < currentThreshold) {
                 return
             }
 
@@ -177,11 +181,11 @@ class ShakeTorchService : Service(), SensorEventListener {
             when (shakeState) {
                 0 -> {
                     // Look for positive rightward swing
-                    if (x > SHAKE_THRESHOLD) {
+                    if (x > currentThreshold) {
                         shakeState = 1
                         lastStateTime = currentTime
                         Log.d(TAG, "Shake Phase 1: Swing Right detected (Accel: $x)")
-                    } else if (x < -SHAKE_THRESHOLD) {
+                    } else if (x < -currentThreshold) {
                         // Also accept starting swing left
                         shakeState = 10
                         lastStateTime = currentTime
@@ -193,7 +197,7 @@ class ShakeTorchService : Service(), SensorEventListener {
                     if (currentTime - lastStateTime > WINDOW_SIZE) {
                         // Reset to idle on timeout
                         shakeState = 0
-                    } else if (x < -SHAKE_THRESHOLD) {
+                    } else if (x < -currentThreshold) {
                         shakeState = 2
                         lastStateTime = currentTime
                         Log.d(TAG, "Shake Phase 2: Swing Left detected (Accel: $x)")
@@ -203,7 +207,7 @@ class ShakeTorchService : Service(), SensorEventListener {
                     // State 2 was Swing Left. Final step must be Swing Right within time.
                     if (currentTime - lastStateTime > WINDOW_SIZE) {
                         shakeState = 0
-                    } else if (x > SHAKE_THRESHOLD) {
+                    } else if (x > currentThreshold) {
                         Log.d(TAG, "Shake Phase 3: Swing Right detected (Accel: $x) -> Triggering Torch!")
                         triggerTorchToggle()
                         shakeState = 0
@@ -214,7 +218,7 @@ class ShakeTorchService : Service(), SensorEventListener {
                     // State 10 was Swing Left. Next step must be Swing Right within time.
                     if (currentTime - lastStateTime > WINDOW_SIZE) {
                         shakeState = 0
-                    } else if (x > SHAKE_THRESHOLD) {
+                    } else if (x > currentThreshold) {
                         shakeState = 11
                         lastStateTime = currentTime
                         Log.d(TAG, "Shake Phase 2: Swing Right detected (Accel: $x)")
@@ -224,7 +228,7 @@ class ShakeTorchService : Service(), SensorEventListener {
                     // State 11 was Swing Right. Final step must be Swing Left within time.
                     if (currentTime - lastStateTime > WINDOW_SIZE) {
                         shakeState = 0
-                    } else if (x < -SHAKE_THRESHOLD) {
+                    } else if (x < -currentThreshold) {
                         Log.d(TAG, "Shake Phase 3: Swing Left detected (Accel: $x) -> Triggering Torch!")
                         triggerTorchToggle()
                         shakeState = 0

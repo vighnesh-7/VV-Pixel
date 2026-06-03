@@ -1,21 +1,12 @@
 package com.example
 
-import android.app.Dialog
 import android.content.Context
-import android.content.Intent
-import android.graphics.Color
-import android.graphics.Typeface
 import android.graphics.drawable.Icon
 import android.media.AudioManager
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.util.Log
-import android.view.View
-import android.view.ViewGroup
-import android.view.Window
-import android.widget.ImageView
-import android.widget.TextView
 import android.widget.Toast
 
 class RingerModeTileService : TileService() {
@@ -27,106 +18,41 @@ class RingerModeTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
-        showRingerChoicesDialog()
-    }
-
-    private fun showRingerChoicesDialog() {
-        val dialog = Dialog(this)
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        dialog.setContentView(R.layout.dialog_ringer_choices)
-
-        val window = dialog.window
-        if (window != null) {
-            window.setBackgroundDrawableResource(android.R.color.transparent)
-            val lp = window.attributes
-            lp.width = ViewGroup.LayoutParams.WRAP_CONTENT
-            lp.height = ViewGroup.LayoutParams.WRAP_CONTENT
-            
-            // Background blur on Android 12+ (SDK 31+)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                window.setBackgroundBlurRadius(30)
-            }
-            window.attributes = lp
-        }
-
-        dialog.setCancelable(true)
-        dialog.setCanceledOnTouchOutside(true) // touch outside exits dialog
-
+        // Toggle series: VIBRATE -> NORMAL (Unmute) -> SILENT (Mute) -> VIBRATE
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val currentMode = audioManager.ringerMode
+        var nextMode = when (currentMode) {
+            AudioManager.RINGER_MODE_VIBRATE -> AudioManager.RINGER_MODE_NORMAL
+            AudioManager.RINGER_MODE_NORMAL -> AudioManager.RINGER_MODE_SILENT
+            else -> AudioManager.RINGER_MODE_VIBRATE
+        }
 
-        // Find dialog views
-        val choiceMute = dialog.findViewById<View>(R.id.choice_mute)
-        val choiceVibrate = dialog.findViewById<View>(R.id.choice_vibrate)
-        val choiceUnmute = dialog.findViewById<View>(R.id.choice_unmute)
-        val btnDismiss = dialog.findViewById<View>(R.id.btn_dialog_dismiss)
-
-        val iconMute = dialog.findViewById<ImageView>(R.id.icon_mute)
-        val iconVibrate = dialog.findViewById<ImageView>(R.id.icon_vibrate)
-        val iconUnmute = dialog.findViewById<ImageView>(R.id.icon_unmute)
-
-        val textMute = dialog.findViewById<TextView>(R.id.text_mute)
-        val textVibrate = dialog.findViewById<TextView>(R.id.text_vibrate)
-        val textUnmute = dialog.findViewById<TextView>(R.id.text_unmute)
-
-        // Highlight the current ringer mode using pristine high-contrast Active plates
-        when (currentMode) {
-            AudioManager.RINGER_MODE_SILENT -> {
-                choiceMute.setBackgroundResource(R.drawable.ringer_btn_active)
-                iconMute.setColorFilter(Color.parseColor("#1D1B20"))
-                textMute.setTextColor(Color.parseColor("#1D1B20"))
-                textMute.setTypeface(null, Typeface.BOLD)
+        // Check permission beforehand to bypass SecurityException-driven system redirects
+        if (nextMode == AudioManager.RINGER_MODE_SILENT) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+            val hasDnd = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                nm?.isNotificationPolicyAccessGranted == true
+            } else {
+                true
             }
-            AudioManager.RINGER_MODE_VIBRATE -> {
-                choiceVibrate.setBackgroundResource(R.drawable.ringer_btn_active)
-                iconVibrate.setColorFilter(Color.parseColor("#1D1B20"))
-                textVibrate.setTextColor(Color.parseColor("#1D1B20"))
-                textVibrate.setTypeface(null, Typeface.BOLD)
-            }
-            AudioManager.RINGER_MODE_NORMAL -> {
-                choiceUnmute.setBackgroundResource(R.drawable.ringer_btn_active)
-                iconUnmute.setColorFilter(Color.parseColor("#1D1B20"))
-                textUnmute.setTextColor(Color.parseColor("#1D1B20"))
-                textUnmute.setTypeface(null, Typeface.BOLD)
+            if (!hasDnd) {
+                nextMode = AudioManager.RINGER_MODE_VIBRATE
+                Toast.makeText(
+                    applicationContext,
+                    "Mute requires DND permission. Toggled Vibrate instead. Grant DND in VV Pixel setup.",
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
 
-        // Action listeners
-        choiceMute.setOnClickListener {
-            setRingerMode(AudioManager.RINGER_MODE_SILENT)
-            dialog.dismiss()
-        }
-        choiceVibrate.setOnClickListener {
-            setRingerMode(AudioManager.RINGER_MODE_VIBRATE)
-            dialog.dismiss()
-        }
-        choiceUnmute.setOnClickListener {
-            setRingerMode(AudioManager.RINGER_MODE_NORMAL)
-            dialog.dismiss()
-        }
-
-        btnDismiss.setOnClickListener {
-            dialog.dismiss()
-        }
-
-        // Launch Dialog from TileService
-        showDialog(dialog)
-    }
-
-    private fun setRingerMode(mode: Int) {
-        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         try {
-            audioManager.ringerMode = mode
-        } catch (e: SecurityException) {
-            Log.e(TAG, "DND Security exception trying to set silent mode, falling back to vibrate", e)
-            Toast.makeText(
-                this,
-                "Mute mode requires Do Not Disturb permission. Grant it in VV Pixel Enhancer app's Setup list.",
-                Toast.LENGTH_LONG
-            ).show()
-            try {
-                audioManager.ringerMode = AudioManager.RINGER_MODE_VIBRATE
-            } catch (ex: Exception) {}
+            audioManager.ringerMode = nextMode
+            val toastMsg = when (nextMode) {
+                AudioManager.RINGER_MODE_NORMAL -> "Unmuted"
+                AudioManager.RINGER_MODE_SILENT -> "Muted (Silent)"
+                else -> "Vibrate"
+            }
+            Toast.makeText(applicationContext, "Ringer: $toastMsg", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set ringer mode", e)
         }

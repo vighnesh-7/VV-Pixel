@@ -26,7 +26,7 @@
             android:clickable="true"
             android:focusable="true">
 
-            <!-- Active Mute State with beautiful Material white circle -->
+            <!-- Active Mute State with beautiful Material circle -->
             <FrameLayout
                 android:id="@+id/img_ringer_mute_active"
                 android:layout_width="54dp"
@@ -39,17 +39,17 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:src="@drawable/ic_mute"
-                    android:tint="#1D1B20" />
+                    android:tint="@color/widget_btn_active_icon" />
             </FrameLayout>
 
-            <!-- Inactive Mute State: standard muted icon (semi-transparent) -->
+            <!-- Inactive Mute State: standard muted icon -->
             <ImageView
                 android:id="@+id/img_ringer_mute_dot"
                 android:layout_width="54dp"
                 android:layout_height="54dp"
                 android:layout_gravity="center"
                 android:src="@drawable/ic_mute"
-                android:tint="#B3E2E3E9"
+                android:tint="@color/widget_btn_inactive_icon"
                 android:padding="11dp"
                 android:visibility="visible" />
         </FrameLayout>
@@ -63,7 +63,7 @@
             android:clickable="true"
             android:focusable="true">
 
-            <!-- Active Vibrate State with beautiful Material white circle -->
+            <!-- Active Vibrate State with beautiful Material circle -->
             <FrameLayout
                 android:id="@+id/img_ringer_vibrate_active"
                 android:layout_width="54dp"
@@ -76,17 +76,17 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:src="@drawable/ic_vibrate"
-                    android:tint="#1D1B20" />
+                    android:tint="@color/widget_btn_active_icon" />
             </FrameLayout>
 
-            <!-- Inactive Vibrate State: standard vibrate icon (semi-transparent) -->
+            <!-- Inactive Vibrate State: standard vibrate icon -->
             <ImageView
                 android:id="@+id/img_ringer_vibrate_dot"
                 android:layout_width="54dp"
                 android:layout_height="54dp"
                 android:layout_gravity="center"
                 android:src="@drawable/ic_vibrate"
-                android:tint="#B3E2E3E9"
+                android:tint="@color/widget_btn_inactive_icon"
                 android:padding="11dp"
                 android:visibility="visible" />
         </FrameLayout>
@@ -100,7 +100,7 @@
             android:clickable="true"
             android:focusable="true">
 
-            <!-- Active Unmute State with beautiful Material white circle -->
+            <!-- Active Unmute State with beautiful Material circle -->
             <FrameLayout
                 android:id="@+id/img_ringer_unmute_active"
                 android:layout_width="54dp"
@@ -113,17 +113,17 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:src="@drawable/ic_unmute"
-                    android:tint="#1D1B20" />
+                    android:tint="@color/widget_btn_active_icon" />
             </FrameLayout>
 
-            <!-- Inactive Unmute State: standard unmute icon (semi-transparent) -->
+            <!-- Inactive Unmute State: standard unmute icon -->
             <ImageView
                 android:id="@+id/img_ringer_unmute_dot"
                 android:layout_width="54dp"
                 android:layout_height="54dp"
                 android:layout_gravity="center"
                 android:src="@drawable/ic_unmute"
-                android:tint="#B3E2E3E9"
+                android:tint="@color/widget_btn_inactive_icon"
                 android:padding="11dp"
                 android:visibility="visible" />
         </FrameLayout>

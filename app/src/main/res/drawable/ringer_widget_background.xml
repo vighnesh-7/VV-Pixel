@@ -3,20 +3,19 @@
     <!-- Outer Premium Material Accent Border -->
     <item>
         <shape>
-            <corners android:radius="100dp" />
-            <solid android:color="#2A2D35" /> <!-- Material dark slate outline -->
+            <corners android:radius="24dp" />
+            <solid android:color="@color/ringer_glass_outline" />
         </shape>
     </item>
 
-    <!-- Semitranslucent Liquid Base Gradient (Glass glassomorphic fluid look) -->
+    <!-- Semitranslucent Liquid Base Gradient -->
     <item android:top="1.5dp" android:bottom="1.5dp" android:left="1.5dp" android:right="1.5dp">
         <shape>
-            <corners android:radius="100dp" />
+            <corners android:radius="24dp" />
             <gradient
                 android:angle="270"
-                android:startColor="#4C515B"
-                android:centerColor="#23252C"
-                android:endColor="#141519"
+                android:startColor="@color/ringer_glass_bg_start"
+                android:endColor="@color/ringer_glass_bg_end"
                 android:type="linear" />
         </shape>
     </item>
@@ -24,10 +23,10 @@
     <!-- Glossy Specular Crescent Lens Reflection Highlight (Liquid glass bubble effect) -->
     <item android:top="2dp" android:bottom="26dp" android:left="6dp" android:right="6dp">
         <shape>
-            <corners android:radius="100dp" />
+            <corners android:radius="22dp" />
             <gradient
                 android:angle="270"
-                android:startColor="#80FFFFFF"
+                android:startColor="#33FFFFFF"
                 android:endColor="#00FFFFFF"
                 android:type="linear" />
         </shape>
@@ -36,10 +35,10 @@
     <!-- Soft Bottom Ambient Fluid Glow -->
     <item android:top="22dp" android:bottom="3dp" android:left="10dp" android:right="10dp">
         <shape>
-            <corners android:radius="100dp" />
+            <corners android:radius="22dp" />
             <gradient
                 android:angle="90"
-                android:startColor="#25FFFFFF"
+                android:startColor="#10FFFFFF"
                 android:endColor="#00FFFFFF"
                 android:type="linear" />
         </shape>

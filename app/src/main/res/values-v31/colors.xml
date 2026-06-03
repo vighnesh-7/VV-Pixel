@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- On Android 12+ light theme, map the active widget state color dynamically to system accent -->
+    <color name="widget_btn_active_bg">@android:color/system_accent1_600</color>
+    <color name="widget_btn_active_icon">@android:color/system_neutral1_100</color>
+
+    <!-- Opaque subtle mix of dynamic wallpaper background for Ringer widget -->
+    <color name="ringer_glass_bg_start">@android:color/system_neutral1_100</color>
+    <color name="ringer_glass_bg_end">@android:color/system_accent1_100</color>
+    <color name="ringer_glass_outline">@android:color/system_accent1_200</color>
+
+    <!-- Dynamic lock widget background and contrast matched icon -->
+    <color name="lock_widget_bg">@android:color/system_accent1_200</color>
+    <color name="lock_widget_icon">@android:color/system_accent1_800</color>
+</resources>
