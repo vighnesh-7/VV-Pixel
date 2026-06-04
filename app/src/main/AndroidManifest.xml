@@ -105,9 +105,9 @@
         </service>
 
         <service
-            android:name=".RefreshRateTileService"
-            android:icon="@drawable/ic_refresh_rate"
-            android:label="Refresh rate"
+            android:name=".CaffeinateTileService"
+            android:icon="@drawable/ic_coffee"
+            android:label="Caffeinate"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:exported="true">
             <intent-filter>

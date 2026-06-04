@@ -410,13 +410,6 @@ fun DashboardScreen(
                 modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
             )
 
-            // Tile Info Item 1: Refresh Rate
-            PixelEnhancerTileInfoCard(
-                title = "Refresh Rate (Hz) Tile",
-                subtitle = "Instantly toggle Smooth display (120Hz) vs Standard (60Hz)",
-                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_refresh_rate)
-            )
-
             // Tile Info Item 2: Ringer Mode
             PixelEnhancerTileInfoCard(
                 title = "Ringer Mode Tile",
@@ -436,6 +429,13 @@ fun DashboardScreen(
                 title = "Volume QS Tile",
                 subtitle = "Tap to expand a custom visual slider board for media and ring levels",
                 iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_volume_equalizer)
+            )
+
+            // Tile Info Item 5: Caffeinate Tile
+            PixelEnhancerTileInfoCard(
+                title = "Caffeinate Tile",
+                subtitle = "Keep screen awake and bypass automatic sleep/lock indefinitely",
+                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_coffee)
             )
         }
 
@@ -650,7 +650,7 @@ fun DashboardScreen(
 
                         PermissionItem(
                             title = "System Settings Writer",
-                            description = "Required to adjust screen brightness and toggle high smooth refresh rates (60Hz / 120Hz).",
+                            description = "Required to adjust screen brightness and display preferences.",
                             isGranted = hasWriteSettings,
                             onRequestGrant = {
                                 val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
@@ -687,6 +687,79 @@ fun DashboardScreen(
                         )
 
 
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // ================= SECTION 6: PIXEL 10 PRO UX TWEAKS =================
+        Column(
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(top = 8.dp)
+        ) {
+            Text(
+                text = "Pro Pixel 10 UX Tweaks",
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+            )
+
+            val tweaks = listOf(
+                "On-Device Wireless ADB loop" to "Use tools like Shizuku or LADB paired with Android's localhost port to grant advanced permissions (like WRITE_SECURE_SETTINGS) directly on your device, bypassing PCs completely.",
+                "Hidden SystemUI Tuner" to "Use an Activity Launcher app to open the hidden SystemUI activity ('com.android.systemui.DemoMode') to hide clunky status bar icons or force a pristine custom layout.",
+                "App Standby Bucket Lock" to "Use ADB command 'am set-standby-bucket [package] rare' to freeze greedy apps. This manually forces rogue apps into the deepest standby bucket, extending active battery cycle hours.",
+                "Key Mapper QS triggers" to "Use open-source key mappers to map a physical volume-key double-press directly to our Caffeinate or Brightness tiles, giving you hardware-button control override.",
+                "Double-Tap Screen Locker" to "Drag our custom 'VV Double Tap Invisible Zone' 1x1 overlay widget onto your home screen launcher to sleep or lock the glass instantly without hardware button wear."
+            )
+
+            tweaks.forEachIndexed { index, (title, desc) ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(100))
+                                .background(MaterialTheme.colorScheme.secondaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "${index + 1}",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            )
+                        }
+
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = desc,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -795,6 +868,7 @@ fun PermissionItem(
     title: String,
     description: String,
     isGranted: Boolean,
+    actionLabel: String = "Grant",
     onRequestGrant: () -> Unit
 ) {
     Row(
@@ -833,7 +907,7 @@ fun PermissionItem(
             ),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text(if (isGranted) "Granted" else "Grant", style = MaterialTheme.typography.labelSmall)
+            Text(if (isGranted) "Granted" else actionLabel, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
