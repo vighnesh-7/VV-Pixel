@@ -42,6 +42,15 @@ class ShakeTorchService : Service(), SensorEventListener {
         }
     }
 
+    private val ringerReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            Log.d(TAG, "Ringer mode changed broadcast received dynamically in ShakeTorchService.")
+            context?.let {
+                RingerToggleWidget.updateAllWidgetsAndTile(it)
+            }
+        }
+    }
+
     private fun registerSensor() {
         if (!isSensorRegistered) {
             accelerometer?.let {
@@ -119,6 +128,14 @@ class ShakeTorchService : Service(), SensorEventListener {
             registerReceiver(screenStateReceiver, filter)
         }
 
+        // Register dynamic ringer mode changed receiver
+        val ringerFilter = IntentFilter(android.media.AudioManager.RINGER_MODE_CHANGED_ACTION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(ringerReceiver, ringerFilter, RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(ringerReceiver, ringerFilter)
+        }
+
         registerSensor()
     }
 
@@ -138,6 +155,11 @@ class ShakeTorchService : Service(), SensorEventListener {
             unregisterReceiver(screenStateReceiver)
         } catch (e: Exception) {
             Log.e(TAG, "Error unregistering screen receiver", e)
+        }
+        try {
+            unregisterReceiver(ringerReceiver)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering ringer receiver", e)
         }
         unregisterSensor()
         try {

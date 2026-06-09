@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Rich frosted translucent white-glass body -->
+    <gradient
+        android:startColor="#33FFFFFF"
+        android:endColor="#12FFFFFF"
+        android:angle="270" />
+    <corners android:radius="18dp" />
+    <!-- Fine crisp, top-light reflection outline -->
+    <stroke android:width="1dp" android:color="#4AFFFFFF" />
+</shape>

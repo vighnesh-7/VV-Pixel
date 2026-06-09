@@ -11,9 +11,42 @@ import android.widget.Toast
 
 class RingerModeTileService : TileService() {
 
+    private var ringerReceiver: android.content.BroadcastReceiver? = null
+
     override fun onStartListening() {
         super.onStartListening()
         updateTileState()
+
+        // Register dynamic receiver for real-time ringer/silent system changes
+        if (ringerReceiver == null) {
+            ringerReceiver = object : android.content.BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: android.content.Intent?) {
+                    Log.d(TAG, "RingerModeTileService ringer receiver: system ringer mode changed, updating state.")
+                    updateTileState()
+                    context?.let {
+                        RingerToggleWidget.updateAllWidgetsAndTile(it)
+                    }
+                }
+            }
+            val filter = android.content.IntentFilter(AudioManager.RINGER_MODE_CHANGED_ACTION)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(ringerReceiver, filter, RECEIVER_EXPORTED)
+            } else {
+                registerReceiver(ringerReceiver, filter)
+            }
+        }
+    }
+
+    override fun onStopListening() {
+        super.onStopListening()
+        ringerReceiver?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error unregistering ringer receiver", e)
+            }
+            ringerReceiver = null
+        }
     }
 
     override fun onClick() {
@@ -57,6 +90,7 @@ class RingerModeTileService : TileService() {
             Log.e(TAG, "Failed to set ringer mode", e)
         }
         updateTileState()
+        RingerToggleWidget.updateAllWidgetsAndTile(applicationContext)
     }
 
     private fun updateTileState() {

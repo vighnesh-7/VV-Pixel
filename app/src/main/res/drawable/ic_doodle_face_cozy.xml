@@ -1,0 +1,31 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <!-- Cozy Organic Face background shape -->
+    <path
+        android:fillColor="#5C85D6"
+        android:pathData="M 12 100 C 12 55 35 25 100 25 L 100 100 Z" />
+    
+    <!-- Sleepy Left Eye (curve) -->
+    <path
+        android:strokeColor="#1A2F4C"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M 46 48 Q 53 55 60 48" />
+        
+    <!-- Sleepy Right Eye (curve) - Perfectly Aligned at Y=48 -->
+    <path
+        android:strokeColor="#1A2F4C"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M 68 48 Q 75 55 82 48" />
+        
+    <!-- Happy Smile curve -->
+    <path
+        android:strokeColor="#1A2F4C"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M 54 70 Q 66 82 78 70" />
+</vector>

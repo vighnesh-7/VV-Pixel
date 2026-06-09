@@ -53,6 +53,15 @@ class VVPixelAccessibilityService : AccessibilityService() {
         }
     }
 
+    private val ringerReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            Log.d(TAG, "Ringer mode changed broadcast received dynamically in AccessibilityService.")
+            context?.let {
+                RingerToggleWidget.updateAllWidgetsAndTile(it)
+            }
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.d(TAG, "VV Pixel Accessibility Service Connected.")
@@ -64,6 +73,13 @@ class VVPixelAccessibilityService : AccessibilityService() {
             registerReceiver(receiver, filter)
         }
         isRegistered = true
+
+        val ringerFilter = IntentFilter(android.media.AudioManager.RINGER_MODE_CHANGED_ACTION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(ringerReceiver, ringerFilter, RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(ringerReceiver, ringerFilter)
+        }
         isServiceRunning = true
     }
 
@@ -110,6 +126,11 @@ class VVPixelAccessibilityService : AccessibilityService() {
                 unregisterReceiver(receiver)
             } catch (e: Exception) {
                 Log.e(TAG, "Error unregistering receiver", e)
+            }
+            try {
+                unregisterReceiver(ringerReceiver)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error unregistering ringer receiver", e)
             }
             isRegistered = false
         }

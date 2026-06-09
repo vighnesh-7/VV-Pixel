@@ -1,0 +1,45 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <!-- Dark Brutalist Backdrop -->
+    <path
+        android:fillColor="#0D0D11"
+        android:strokeColor="#24252C"
+        android:strokeWidth="1.2"
+        android:pathData="M 15,15 C 15,10 20,5 25,5 L 75,5 C 80,5 85,10 85,15 L 85,85 C 85,90 80,95 75,95 L 25,95 C 20,95 15,90 15,85 Z" />
+
+    <!-- 1. Top-Left Camera C-Ring object -->
+    <path
+        android:strokeColor="#F5F5F5"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M 28,32 A 10,10 0 1,1 42,20" />
+
+    <!-- 2. Top-Right Slanted Bar object -->
+    <path
+        android:strokeColor="#F5F5F5"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M 62,15 L 78,31" />
+
+    <!-- 3. Central Wireless Charging Ring object -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M 32,50 A 18,18 0 1,1 68,50" />
+
+    <!-- 4. Bottom Vertical Power Bar object -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M 50,75 L 50,88" />
+
+    <!-- 5. Bottom-Right Red Accent Dot object -->
+    <path
+        android:fillColor="#FF2D55"
+        android:pathData="M 72,75 A 3.5,3.5 0 1,1 79,75 A 3.5,3.5 0 1,1 72,75 Z" />
+</vector>

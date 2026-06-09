@@ -116,11 +116,13 @@ fun RingerModeDialogScreen(onDismiss: () -> Unit) {
                         try {
                             audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
                             currentMode = AudioManager.RINGER_MODE_SILENT
+                            RingerToggleWidget.updateAllWidgetsAndTile(context)
                         } catch (e: SecurityException) {
                             android.widget.Toast.makeText(context, "Do Not Disturb permission required for Silent", android.widget.Toast.LENGTH_LONG).show()
                             try {
                                 audioManager.ringerMode = AudioManager.RINGER_MODE_VIBRATE
                                 currentMode = AudioManager.RINGER_MODE_VIBRATE
+                                RingerToggleWidget.updateAllWidgetsAndTile(context)
                             } catch (ex: Exception) {}
                         } catch (e: Exception) {
                             currentMode = audioManager.ringerMode
@@ -139,6 +141,7 @@ fun RingerModeDialogScreen(onDismiss: () -> Unit) {
                         try {
                             audioManager.ringerMode = AudioManager.RINGER_MODE_VIBRATE
                             currentMode = AudioManager.RINGER_MODE_VIBRATE
+                            RingerToggleWidget.updateAllWidgetsAndTile(context)
                         } catch (e: Exception) {
                             currentMode = audioManager.ringerMode
                         }
@@ -156,6 +159,7 @@ fun RingerModeDialogScreen(onDismiss: () -> Unit) {
                         try {
                             audioManager.ringerMode = AudioManager.RINGER_MODE_NORMAL
                             currentMode = AudioManager.RINGER_MODE_NORMAL
+                            RingerToggleWidget.updateAllWidgetsAndTile(context)
                         } catch (e: Exception) {
                             currentMode = audioManager.ringerMode
                         }

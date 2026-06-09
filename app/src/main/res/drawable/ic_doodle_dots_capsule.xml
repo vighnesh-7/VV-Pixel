@@ -1,0 +1,45 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <!-- Concentric Dotted Guidelines/Dial in Background -->
+    <path
+        android:strokeColor="#44FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="round"
+        android:dashWidth="3dp"
+        android:dashGap="5dp"
+        android:pathData="M 15,50 A 35,35 0 1,1 85,50 A 35,35 0 1,1 15,50" />
+    <path
+        android:strokeColor="#22FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="round"
+        android:dashWidth="2dp"
+        android:dashGap="4dp"
+        android:pathData="M 28,50 A 22,22 0 1,1 72,50 A 22,22 0 1,1 28,50" />
+
+    <!-- Dumbbell Hands (Red hour-minute linked indicator - very modern) -->
+    <!-- Hand 1: Black capsule hand -->
+    <path
+        android:fillColor="#111111"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:pathData="M 46,28 C 48,28 50,30 50,32 L 50,50 L 42,50 L 42,32 C 42,30 44,28 46,28 Z" />
+        
+    <!-- Hand 2: Bold red barbell indicator -->
+    <path
+        android:fillColor="#FF2D55"
+        android:pathData="M 32,50 C 32,45 36,41 41,41 L 64,41 C 69,41 73,45 73,50 C 73,55 69,59 64,59 L 41,59 C 36,59 32,55 32,50 Z" />
+        
+    <!-- Replacing circles with standard paths -->
+    <path
+        android:fillColor="#80000000"
+        android:pathData="M 35,50 a 6,6 0 1,0 12,0 a 6,6 0 1,0 -12,0" />
+        
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M 58,50 a 6,6 0 1,0 12,0 a 6,6 0 1,0 -12,0" />
+</vector>

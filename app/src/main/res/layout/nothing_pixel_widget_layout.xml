@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:backgroundTint="#0C0D0E">
+
+    <!-- Centered Content Column -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="12dp">
+
+        <!-- Nothing Pixelated/Monospace Time ImageView -->
+        <ImageView
+            android:id="@+id/widget_time_img"
+            android:layout_width="wrap_content"
+            android:layout_height="64dp"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true"
+            android:layout_gravity="center_horizontal" />
+
+        <!-- Date Text Clock -->
+        <TextClock
+            android:id="@+id/widget_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:format12Hour="d MMM yyyy"
+            android:format24Hour="d MMM yyyy"
+            android:textColor="#888888"
+            android:textSize="12sp"
+            android:fontFamily="monospace"
+            android:textStyle="bold"
+            android:letterSpacing="0.08"
+            android:layout_marginTop="6dp"
+            android:layout_gravity="center_horizontal" />
+
+        <!-- Alarm box with pixel Nothing red color -->
+        <LinearLayout
+            android:id="@+id/alarm_box"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/double_tap_zone_background"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="5dp"
+            android:layout_marginTop="10dp"
+            android:layout_gravity="center_horizontal">
+
+            <ImageView
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:src="@android:drawable/ic_lock_idle_alarm"
+                android:tint="#FF2D55"
+                android:contentDescription="Alarm Icon" />
+
+            <TextView
+                android:id="@+id/alarm_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Sync"
+                android:textColor="#FF2D55"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:textStyle="bold"
+                android:layout_marginStart="6dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</RelativeLayout>

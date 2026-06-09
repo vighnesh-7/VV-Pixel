@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent"
+    android:padding="8dp">
+
+    <!-- Centered content block mimicking the iOS lock screen layout -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_centerInParent="true">
+
+        <!-- 1. Ultimate Bold iOS-themed Glassmorphic Clock Time with layered 3D depth -->
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal">
+
+            <!-- Deep Ambient Soft Shadow & Tint Layer -->
+            <TextClock
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="h : mm"
+                android:format24Hour="H : mm"
+                android:textColor="#3DFFFFFF"
+                android:textSize="85sp"
+                android:fontFamily="sans-serif-medium"
+                android:textStyle="bold"
+                android:shadowColor="#B0000000"
+                android:shadowDx="0"
+                android:shadowDy="6"
+                android:shadowRadius="14"
+                android:letterSpacing="-0.04"
+                android:gravity="center"
+                android:includeFontPadding="false" />
+
+            <!-- Bezel Glass Highlight Edge Layer (Refraction Highlight) -->
+            <TextClock
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="h : mm"
+                android:format24Hour="H : mm"
+                android:textColor="#73FFFFFF"
+                android:textSize="85sp"
+                android:fontFamily="sans-serif-medium"
+                android:textStyle="bold"
+                android:shadowColor="#00000000"
+                android:shadowDx="0"
+                android:shadowDy="0"
+                android:shadowRadius="0"
+                android:letterSpacing="-0.04"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:layout_marginLeft="1dp"
+                android:layout_marginTop="1dp" />
+
+            <!-- Core Frosted Glass Face Layer (Body Transparency) -->
+            <TextClock
+                android:id="@+id/widget_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="h : mm"
+                android:format24Hour="H : mm"
+                android:textColor="#92FFFFFF"
+                android:textSize="85sp"
+                android:fontFamily="sans-serif-medium"
+                android:textStyle="bold"
+                android:shadowColor="#00000000"
+                android:shadowDx="0"
+                android:shadowDy="0"
+                android:shadowRadius="0"
+                android:letterSpacing="-0.04"
+                android:gravity="center"
+                android:includeFontPadding="false" />
+        </FrameLayout>
+
+        <!-- 2. Date-day beneath time (centered like iOS Lock Screen) -->
+        <TextClock
+            android:id="@+id/widget_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="-2dp"
+            android:format12Hour="EEEE, MMMM d"
+            android:format24Hour="EEEE, MMMM d"
+            android:textColor="#E0E6FF"
+            android:textSize="15sp"
+            android:fontFamily="sans-serif-medium"
+            android:shadowColor="#80000000"
+            android:shadowDx="0"
+            android:shadowDy="2"
+            android:shadowRadius="6"
+            android:letterSpacing="0.01"
+            android:gravity="center" />
+
+        <!-- 3. Minimalist Alarm detail beneath date -->
+        <LinearLayout
+            android:id="@+id/alarm_box"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/ios_glass_pill_background"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="5dp">
+
+            <ImageView
+                android:layout_width="13dp"
+                android:layout_height="13dp"
+                android:src="@android:drawable/ic_lock_idle_alarm"
+                android:tint="#FFFFFF"
+                android:contentDescription="Alarm Icon" />
+
+            <TextView
+                android:id="@+id/alarm_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="No Alarm"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:fontFamily="sans-serif-medium"
+                android:layout_marginStart="6dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</RelativeLayout>

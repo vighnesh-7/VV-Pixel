@@ -10,6 +10,21 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <queries>
+        <!-- For querying system clock and alarm intent configurations under Android 11+ -->
+        <intent>
+            <action android:name="android.intent.action.SHOW_ALARMS" />
+        </intent>
+        <package android:name="com.google.android.deskclock" />
+        <package android:name="com.android.deskclock" />
+        <package android:name="com.sec.android.app.clockpackage" />
+        <package android:name="com.huawei.deskclock" />
+        <package android:name="com.xiaomi.deskclock" />
+        <package android:name="com.oppo.deskclock" />
+        <package android:name="com.oneplus.deskclock" />
+        <package android:name="com.coloros.deskclock" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -176,6 +191,7 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.media.RINGER_MODE_CHANGED" />
                 <action android:name="com.example.vvpixel.ACTION_SET_RINGER_VIBRATE" />
                 <action android:name="com.example.vvpixel.ACTION_SET_RINGER_MUTE" />
                 <action android:name="com.example.vvpixel.ACTION_SET_RINGER_UNMUTE" />
@@ -183,6 +199,67 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/ringer_widget_info" />
+        </receiver>
+
+        <!-- Doodle Clock Widgets -->
+        <receiver
+            android:name=".DoodleFaceClockWidget"
+            android:label="Doodle Cozy Face Clock"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.app.action.NEXT_ALARM_CLOCK_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/doodle_face_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".BlobMonsterClockWidget"
+            android:label="Doodle Blob Monster Clock"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.app.action.NEXT_ALARM_CLOCK_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/blob_monster_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".NothingPixelClockWidget"
+            android:label="Doodle Nothing LED Clock"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.app.action.NEXT_ALARM_CLOCK_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/nothing_pixel_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".LiquidGlassClockWidget"
+            android:label="iOS Liquid Glass Clock"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.app.action.NEXT_ALARM_CLOCK_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/liquid_glass_widget_info" />
         </receiver>
 
     </application>

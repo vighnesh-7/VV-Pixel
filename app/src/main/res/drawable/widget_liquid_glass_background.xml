@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Premium vibrant iOS-style liquid cosmic gradient background -->
+    <gradient
+        android:startColor="#6A11CB"
+        android:centerColor="#2575FC"
+        android:endColor="#0B091D"
+        android:angle="135" />
+    <corners android:radius="28dp" />
+</shape>

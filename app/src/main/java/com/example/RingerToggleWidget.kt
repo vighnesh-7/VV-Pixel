@@ -87,13 +87,7 @@ class RingerToggleWidget : AppWidgetProvider() {
             triggerVibration(context)
         }
 
-        // Update all ringer widgets
-        val appWidgetManager = AppWidgetManager.getInstance(context)
-        val thisWidget = ComponentName(context, RingerToggleWidget::class.java)
-        val allIds = appWidgetManager.getAppWidgetIds(thisWidget)
-        for (id in allIds) {
-            updateWidget(context, appWidgetManager, id)
-        }
+        updateAllWidgetsAndTile(context)
     }
 
     private fun triggerVibration(context: Context) {
@@ -124,6 +118,33 @@ class RingerToggleWidget : AppWidgetProvider() {
         const val ACTION_SET_RINGER_VIBRATE = "com.example.vvpixel.ACTION_SET_RINGER_VIBRATE"
         const val ACTION_SET_RINGER_MUTE = "com.example.vvpixel.ACTION_SET_RINGER_MUTE"
         const val ACTION_SET_RINGER_UNMUTE = "com.example.vvpixel.ACTION_SET_RINGER_UNMUTE"
+
+        fun updateAllWidgetsAndTile(context: Context) {
+            val appContext = context.applicationContext
+            try {
+                val appWidgetManager = AppWidgetManager.getInstance(appContext)
+                val thisWidget = ComponentName(appContext, RingerToggleWidget::class.java)
+                val allIds = appWidgetManager.getAppWidgetIds(thisWidget)
+                for (id in allIds) {
+                    updateWidget(appContext, appWidgetManager, id)
+                }
+                Log.d(TAG, "Successfully updated all ringer widgets.")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating widgets in batch", e)
+            }
+
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    android.service.quicksettings.TileService.requestListeningState(
+                        appContext,
+                        ComponentName(appContext, RingerModeTileService::class.java)
+                    )
+                    Log.d(TAG, "Successfully requested QS tile state refresh.")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error requesting QS tile state refresh", e)
+            }
+        }
 
         fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
             val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
