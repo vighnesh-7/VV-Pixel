@@ -69,8 +69,12 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Path
 import java.net.NetworkInterface
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.Inet4Address
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.awaitAll
@@ -78,6 +82,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.delay
 
 data class HotspotClient(
     val ip: String,
@@ -376,284 +382,251 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 fun getActiveSubnets(): List<String> {
     val subnets = mutableListOf<String>()
     try {
-        val interfaces = NetworkInterface.getNetworkInterfaces()
-        if (interfaces != null) {
-            for (netInterface in Collections.list(interfaces)) {
-                if (netInterface.isLoopback) continue
-                val addresses = netInterface.inetAddresses ?: continue
-                for (address in Collections.list(addresses)) {
-                    if (!address.isLoopbackAddress && address is Inet4Address) {
-                        val ipStr = address.hostAddress ?: continue
-                        if (ipStr.startsWith("192.168.") || ipStr.startsWith("10.") || ipStr.startsWith("172.")) {
-                            val lastDot = ipStr.lastIndexOf('.')
-                            if (lastDot > 0) {
-                                subnets.add(ipStr.substring(0, lastDot + 1))
-                            }
-                        }
-                    }
+        val interfaces = NetworkInterface.getNetworkInterfaces() ?: return listOf("192.168.43.")
+        for (iface in Collections.list(interfaces)) {
+            if (iface.isLoopback || !iface.isUp) continue
+            for (addr in Collections.list(iface.inetAddresses)) {
+                if (addr.isLoopbackAddress || addr !is Inet4Address) continue
+                val ip = addr.hostAddress ?: continue
+                if (ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172.")) {
+                    val prefix = ip.substringBeforeLast('.') + '.'
+                    subnets.add(prefix)
                 }
             }
         }
     } catch (e: Exception) {
         e.printStackTrace()
     }
-    val list = subnets.distinct()
-    return if (list.isEmpty()) listOf("192.168.43.") else list
+    return subnets.distinct().ifEmpty { listOf("192.168.43.") }
 }
 
 fun ipToNumericValue(ip: String): Long {
     return try {
-        val parts = ip.split(".")
-        if (parts.size == 4) {
-            (parts[0].toLong() shl 24) + (parts[1].toLong() shl 16) + (parts[2].toLong() shl 8) + parts[3].toLong()
-        } else {
-            0L
-        }
-    } catch (e: Exception) {
-        0L
-    }
+        val p = ip.split(".")
+        if (p.size == 4)
+            (p[0].toLong() shl 24) + (p[1].toLong() shl 16) + (p[2].toLong() shl 8) + p[3].toLong()
+        else 0L
+    } catch (e: Exception) { 0L }
 }
 
-fun getPingLatency(ip: String): Long? {
+fun parseArpForSubnet(
+    subnetPrefix: String,
+    sharedPrefs: android.content.SharedPreferences
+): Map<String, HotspotClient> {
+    val result = mutableMapOf<String, HotspotClient>()
     try {
-        val startTime = System.currentTimeMillis()
-        val process = Runtime.getRuntime().exec(arrayOf("ping", "-c", "1", "-w", "1", ip))
-        val exitVal = process.waitFor()
-        if (exitVal == 0) {
-            val endTime = System.currentTimeMillis()
-            return (endTime - startTime).coerceAtLeast(1)
+        val reader = java.io.BufferedReader(java.io.FileReader("/proc/net/arp"))
+        reader.use { br ->
+            br.readLine() // skip header
+            var line = br.readLine()
+            while (line != null) {
+                val parts = line.trim().split("\\s+".toRegex())
+                if (parts.size >= 4) {
+                    val ip    = parts[0]
+                    val flags = parts[2]  // "0x2" = valid, "0x0" = incomplete
+                    val mac   = parts[3]
+
+                    if (ip.startsWith(subnetPrefix) &&
+                        ip.matches(Regex("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}")) &&
+                        flags != "0x0" &&
+                        mac != "00:00:00:00:00:00"
+                    ) {
+                        val cleanMac     = mac.takeIf { it.length >= 17 }
+                        val manufacturer = lookupManufacturer(cleanMac)
+                        val savedNick    = sharedPrefs.getString("device_nickname_$ip", null)
+                        result[ip] = HotspotClient(
+                            ip           = ip,
+                            hostname     = null,
+                            isReachable  = true,
+                            nickname     = savedNick,
+                            mac          = cleanMac,
+                            manufacturer = manufacturer,
+                            pingMs       = null
+                        )
+                    }
+                }
+                line = br.readLine()
+            }
         }
-    } catch (e: Exception) {}
-    return null
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+    return result
 }
 
 fun parseSystemHotspotDevices(sharedPrefs: android.content.SharedPreferences): List<HotspotClient> {
-    val deviceList = mutableMapOf<String, HotspotClient>()
-    
-    // Method A: Parse '/proc/net/arp'
-    try {
-        val arpReader = java.io.BufferedReader(java.io.FileReader("/proc/net/arp"))
-        arpReader.use { reader ->
-            var line: String? = reader.readLine()
-            while (line != null) {
-                // Ignore headers
-                if (!line.contains("IP address") && !line.contains("IP")) {
-                    val parts = line.split("\\s+".toRegex()).filter { it.isNotEmpty() }
-                    if (parts.size >= 4) {
-                        val ip = parts[0]
-                        val flags = parts[2]
-                        val mac = parts[3]
-                        
-                        if (ip.matches(Regex("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}"))) {
-                            val cleanMac = if (mac != "00:00:00:00:00:00") mac else null
-                            val manufacturer = if (cleanMac != null) lookupManufacturer(cleanMac) else "Connected Guest"
-                            val savedNickname = sharedPrefs.getString("device_nickname_$ip", null)
-                            
-                            deviceList[ip] = HotspotClient(
-                                ip = ip,
-                                hostname = null,
-                                isReachable = flags != "0x0",
-                                nickname = savedNickname,
-                                mac = cleanMac,
-                                manufacturer = manufacturer,
-                                pingMs = null
-                            )
-                        }
-                    }
-                }
-                line = reader.readLine()
-            }
+    return parseArpForSubnet("", sharedPrefs).values.toList()
+}
+
+suspend fun measurePingMs(ip: String): Long? = withContext(Dispatchers.IO) {
+    return@withContext try {
+        withTimeoutOrNull(1_500L) {
+            val start = System.currentTimeMillis()
+            val proc  = Runtime.getRuntime().exec(arrayOf("ping", "-c", "1", "-w", "1", ip))
+            val exit  = proc.waitFor()
+            if (exit == 0) (System.currentTimeMillis() - start).coerceAtLeast(1) else null
         }
-    } catch (e: Exception) {
-        e.printStackTrace()
+    } catch (e: Exception) { null }
+}
+
+suspend fun resolveHostname(ip: String): String? = withContext(Dispatchers.IO) {
+    return@withContext try {
+        withTimeoutOrNull(800L) {
+            val addr     = InetAddress.getByName(ip)
+            val hostname = addr.hostName
+            if (hostname.isNullOrEmpty() || hostname == ip) null else hostname
+        }
+    } catch (e: Exception) { null }
+}
+
+class MdnsNameCollector(context: Context) {
+    val names: ConcurrentHashMap<String, String> = ConcurrentHashMap()
+    private val nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
+    private val listeners  = mutableListOf<NsdManager.DiscoveryListener>()
+
+    private val serviceTypes = listOf(
+        "_http._tcp.",
+        "_device-info._tcp.",
+        "_airplay._tcp.",
+        "_raop._tcp.",
+        "_googlecast._tcp.",
+        "_ipp._tcp.",
+        "_printer._tcp.",
+        "_smb._tcp.",
+        "_sftp-ssh._tcp.",
+        "_workstation._tcp."
+    )
+
+    fun startDiscovery() {
+        for (type in serviceTypes) {
+            val listener = object : NsdManager.DiscoveryListener {
+                override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {}
+                override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int)  {}
+                override fun onDiscoveryStarted(serviceType: String) {}
+                override fun onDiscoveryStopped(serviceType: String) {}
+                override fun onServiceLost(info: NsdServiceInfo) {}
+
+                override fun onServiceFound(info: NsdServiceInfo) {
+                    nsdManager.resolveService(info, object : NsdManager.ResolveListener {
+                        override fun onResolveFailed(si: NsdServiceInfo, errorCode: Int) {}
+                        override fun onServiceResolved(si: NsdServiceInfo) {
+                            val ip   = si.host?.hostAddress ?: return
+                            val name = si.serviceName
+                                ?.replace(Regex("\\s*\\(\\d+\\)$"), "")
+                                ?.takeIf { it.isNotBlank() && it != ip }
+                                ?: si.host?.hostName?.takeIf { it != ip }
+                                ?: return
+                            names[ip] = name
+                        }
+                    })
+                }
+            }
+            try {
+                nsdManager.discoverServices(type, NsdManager.PROTOCOL_DNS_SD, listener)
+                listeners.add(listener)
+            } catch (e: Exception) {}
+        }
     }
 
-    // Method B: Parse 'ip neighbor show'
-    try {
-        val process = Runtime.getRuntime().exec("ip neighbor show")
-        process.inputStream.bufferedReader().useLines { lines ->
-            lines.forEach { line ->
-                val parts = line.split("\\s+".toRegex()).filter { it.isNotEmpty() }
-                if (parts.isNotEmpty()) {
-                    val ip = parts[0]
-                    if (ip.matches(Regex("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}")) && !line.contains("FAILED")) {
-                        var mac: String? = null
-                        val lladdrIdx = parts.indexOf("lladdr")
-                        if (lladdrIdx != -1 && lladdrIdx + 1 < parts.size) {
-                            mac = parts[lladdrIdx + 1]
-                        }
-                        
-                        val isReachable = line.contains("REACHABLE") || line.contains("DELAY") || line.contains("STALE")
-                        val cleanMac = if (mac != "00:00:00:00:00:00") mac else null
-                        val manufacturer = if (cleanMac != null) lookupManufacturer(cleanMac) else "Connected Guest"
-                        val savedNickname = sharedPrefs.getString("device_nickname_$ip", null)
-                        
-                        val existing = deviceList[ip]
-                        if (existing == null) {
-                            deviceList[ip] = HotspotClient(
-                                ip = ip,
-                                hostname = null,
-                                isReachable = isReachable,
-                                nickname = savedNickname,
-                                mac = cleanMac,
-                                manufacturer = manufacturer,
-                                pingMs = null
-                            )
-                        } else {
-                            deviceList[ip] = existing.copy(
-                                mac = existing.mac ?: cleanMac,
-                                manufacturer = existing.manufacturer ?: manufacturer,
-                                isReachable = existing.isReachable || isReachable
-                            )
-                        }
-                    }
-                }
-            }
+    fun stopDiscovery() {
+        for (l in listeners) {
+            try { nsdManager.stopServiceDiscovery(l) } catch (e: Exception) {}
         }
-    } catch (e: Exception) {
-        e.printStackTrace()
+        listeners.clear()
     }
-    
-    return deviceList.values.toList()
+}
+
+suspend fun probeCommonPorts(ip: String): Boolean = withContext(Dispatchers.IO) {
+    val ports = intArrayOf(5353, 80, 443, 445, 22, 8080, 62078, 7000)
+    for (port in ports) {
+        var socket: java.net.Socket? = null
+        try {
+            socket = java.net.Socket()
+            socket.connect(InetSocketAddress(ip, port), 120)
+            return@withContext true
+        } catch (e: java.net.ConnectException) {
+            return@withContext true
+        } catch (e: Exception) {
+            val msg = e.message ?: ""
+            if (msg.contains("refused", ignoreCase = true) ||
+                msg.contains("reset",   ignoreCase = true)) {
+                return@withContext true
+            }
+        } finally {
+            try { socket?.close() } catch (e: Exception) {}
+        }
+    }
+    false
 }
 
 suspend fun scanHotspotSubnet(
+    context: Context,
     subnetPrefix: String,
     onProgress: (Int, Int) -> Unit,
     sharedPrefs: android.content.SharedPreferences
 ): List<HotspotClient> = withContext(Dispatchers.IO) {
-    // 1. Fetch instantly known system neighbor clients
-    val systemFound = parseSystemHotspotDevices(sharedPrefs)
-    val systemFoundMap = systemFound.associateBy { it.ip }
+    val mdns = MdnsNameCollector(context)
+    mdns.startDiscovery()
 
-    val totalIps = 253 // .2 to .254
-    var completedCount = 0
-    val progressMutex = Any()
-    val semaphore = Semaphore(60) // 60 parallel tasks for rapid resolution
+    val arpMap = parseArpForSubnet(subnetPrefix, sharedPrefs)
+    val totalIps  = 253
+    var completed = 0
+    val lock      = Any()
+    val semaphore = Semaphore(20)
 
     val jobs = (2..254).map { lastOctet ->
         async {
             semaphore.withPermit {
-                val ip = subnetPrefix + lastOctet
-                val knownExisting = systemFoundMap[ip]
-                var isAlive = knownExisting != null
-                var hostname: String? = null
-                val mac: String? = knownExisting?.mac
-                var manufacturer: String? = knownExisting?.manufacturer
-                var measuredPing: Long? = null
+                val ip      = "$subnetPrefix$lastOctet"
+                val fromArp = arpMap[ip]
+                var alive = fromArp != null
 
-                if (isAlive) {
-                    measuredPing = getPingLatency(ip)
+                if (!alive) {
+                    alive = withTimeoutOrNull(600L) {
+                        InetAddress.getByName(ip).isReachable(500)
+                    } ?: false
                 }
 
-                if (!isAlive) {
-                    try {
-                        // Method 1: Quick native command line ping
-                        val process = Runtime.getRuntime().exec(arrayOf("ping", "-c", "1", "-w", "1", ip))
-                        val exitVal = process.waitFor()
-                        if (exitVal == 0) {
-                            isAlive = true
-                        }
-                    } catch (e: Exception) {}
-
-                    if (!isAlive) {
-                        try {
-                            // Method 2: Standard isReachable
-                            val address = InetAddress.getByName(ip)
-                            isAlive = address.isReachable(120)
-                        } catch (e: Exception) {}
-                    }
-
-                    if (!isAlive) {
-                        // Method 3: Port Probing for silent-firewall devices (e.g. Windows/Mac laptops)
-                        val portsToProbe = intArrayOf(5353, 135, 445, 139, 80, 443, 22, 62078)
-                        for (port in portsToProbe) {
-                            var socket: java.net.Socket? = null
-                            try {
-                                socket = java.net.Socket()
-                                socket.connect(java.net.InetSocketAddress(ip, port), 100)
-                                isAlive = true
-                                break
-                            } catch (e: java.net.ConnectException) {
-                                isAlive = true
-                                break
-                            } catch (e: Exception) {
-                                val msg = e.message ?: ""
-                                if (msg.contains("refused", ignoreCase = true) || msg.contains("reset", ignoreCase = true)) {
-                                    isAlive = true
-                                    break
-                                }
-                            } finally {
-                                try { socket?.close() } catch (ex: Exception) {}
-                            }
-                        }
-                    }
-
-                    if (isAlive) {
-                        measuredPing = getPingLatency(ip)
-                    }
+                if (!alive) {
+                    alive = probeCommonPorts(ip)
                 }
 
-                if (isAlive) {
-                    try {
-                        val address = InetAddress.getByName(ip)
-                        val resolvedHost = address.hostName
-                        val canonical = address.canonicalHostName
-                        if (!resolvedHost.isNullOrEmpty() && resolvedHost != ip) {
-                            hostname = resolvedHost
-                        } else if (!canonical.isNullOrEmpty() && canonical != ip) {
-                            hostname = canonical
-                        }
-                    } catch (e: Exception) {}
+                synchronized(lock) {
+                    completed++
+                    onProgress(completed, totalIps)
                 }
 
-                synchronized(progressMutex) {
-                    completedCount++
-                    onProgress(completedCount, totalIps)
-                }
+                if (!alive) return@withPermit null
 
-                if (isAlive) {
-                    val savedNickname = sharedPrefs.getString("device_nickname_$ip", null)
-                    HotspotClient(
-                        ip = ip,
-                        hostname = hostname,
-                        isReachable = true,
-                        nickname = savedNickname,
-                        mac = mac,
-                        manufacturer = manufacturer ?: lookupManufacturer(mac),
-                        pingMs = measuredPing
-                    )
-                } else {
-                    null
-                }
+                val mdnsName = mdns.names[ip]
+                val hostname = mdnsName ?: resolveHostname(ip)
+                val ping = measurePingMs(ip)
+
+                val savedNick = sharedPrefs.getString("device_nickname_$ip", null)
+                HotspotClient(
+                    ip           = ip,
+                    hostname     = hostname,
+                    isReachable  = true,
+                    nickname     = savedNick,
+                    mac          = fromArp?.mac,
+                    manufacturer = fromArp?.manufacturer ?: lookupManufacturer(null),
+                    pingMs       = ping
+                )
             }
         }
     }
 
-    val activeScanned = jobs.awaitAll().filterNotNull()
-    val combinedMap = mutableMapOf<String, HotspotClient>()
-    
-    // Seed with our system neighbor scan first
-    systemFound.forEach { client ->
-        combinedMap[client.ip] = client
-    }
-    
-    // Overlay scanning results (adds hostname + ping ms)
-    activeScanned.forEach { client ->
-        val existing = combinedMap[client.ip]
-        if (existing == null) {
-            combinedMap[client.ip] = client
-        } else {
-            combinedMap[client.ip] = existing.copy(
-                hostname = client.hostname ?: existing.hostname,
-                isReachable = true,
-                pingMs = client.pingMs ?: existing.pingMs
-            )
-        }
+    val active = jobs.awaitAll().filterNotNull()
+    delay(800L)
+    mdns.stopDiscovery()
+
+    val result = active.map { client ->
+        val lateMdns = mdns.names[client.ip]
+        if (lateMdns != null && client.hostname == null) client.copy(hostname = lateMdns)
+        else client
     }
 
-    val results = combinedMap.values.toList().sortedBy { ipToNumericValue(it.ip) }
-    results
+    result.sortedBy { ipToNumericValue(it.ip) }
 }
 
 private fun isAccessibilityServiceEnabled(context: Context): Boolean {
@@ -1513,6 +1486,7 @@ fun DashboardScreen(
                                     coroutineScope.launch {
                                         try {
                                             val results = scanHotspotSubnet(
+                                                context,
                                                 selectedSubnetPrefix,
                                                 onProgress = { current, total ->
                                                     scanProgress = current.toFloat() / total
