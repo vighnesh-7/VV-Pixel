@@ -52,6 +52,14 @@
         *   **Mode 2 (Always-On):** Runs as a Foreground Service keeping a wake lock. Unregisters sensor if the device is static (using coarse step detection/gravity sensor) to preserve battery.
         *   Main toggles allow the user to select their desired behavior.
 
+### 2.7 Hotspot Connected Devices Scanner
+*   **The Problem:** On standard stock Pixel devices, viewing the names and details of currently active connected hotspot devices is buried deep within settings submenus. Furthermore, there is no way to assign and remember friendly nicknames for devices belonging to friends or family members.
+*   **The Solution:**
+    1.  **Dynamic Network Interface Discovery:** Enumerate system network interfaces (e.g., `ap0`, `swlan0`, `wlan1`) to dynamically detect the current hotspot subnet gateway (usually `192.168.43.1` or similar), defaulting to the standard `192.168.43.x` range if the adapter is transient.
+    2.  **Concurrently-probed Coroutine Search:** Spawn rapid non-blocking Coroutines (`Dispatchers.IO`) sweeping IPs `.2` through `.254` in under 3 seconds using the robust shell-based runtime `ping -c 1 -w 1` binary execution and JVM DNS PTR resolution.
+    3.  **Friendly Device List:** Present a beautiful dynamic list of active hosts with real-time status, custom IP and hostnames.
+    4.  **Persistent Client Nicknames:** Grant users the power to tap any detected client to assign, modify, and save custom nicknames (e.g. "Dad's Pixel Tablet", "My iPad") persisted locally in SharedPreferences.
+
 ---
 
 ## 3. Architecture & Permissions
@@ -63,6 +71,7 @@ The application adheres strictly to the principle of minimal permissions. No int
 *   `android.permission.FOREGROUND_SERVICE` and `android.permission.FOREGROUND_SERVICE_SPECIAL_USE` - To maintain the shake-to-torch active background service cleanly on modern Android 14+ devices.
 *   `android.permission.SYSTEM_ALERT_WINDOW` - To draw the custom volume overlay directly on top when clicking the volume QS tile.
 *   `android.permission.BIND_ACCESSIBILITY_SERVICE` - To allow the application to execute device locks natively.
+*   *Note on local network access:* Scanning local subnet IPs requires opening standard Java sockets/pings, which does not require specialized privileged Android permissions.
 
 ---
 
@@ -77,3 +86,7 @@ The application adheres strictly to the principle of minimal permissions. No int
     *   `AdaptiveBrightnessTile`: Handle toggling values in system table.
     *   `VolumeSliderTile`: Launch overlay activity or dynamic dialog with volume control block.
 7.  **Main Application Interface (Jetpack Compose):** A beautiful console providing full visual toggle buttons to enable/disable each helper dynamically with step-by-step guides for custom widget placements.
+8.  **Hotspot Device Scanner Module:**
+    *   Implement dynamic adapter detection logic in Kotlin (`MainActivity.kt`).
+    *   Implement parallel Coroutine scanning utilizing standard process ping checks and reverse DNS lookup.
+    *   Design a modern Jetpack Compose interface inside `DashboardScreen` displaying discovered clients, real-time scanning states, active IP/Subnet fields, and custom nickname dialog inputs.

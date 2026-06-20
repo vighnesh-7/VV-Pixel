@@ -67,6 +67,192 @@ import java.util.Locale
 import android.app.AlarmManager
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Path
+import java.net.NetworkInterface
+import java.net.InetAddress
+import java.net.Inet4Address
+import java.util.Collections
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
+data class HotspotClient(
+    val ip: String,
+    val hostname: String?,
+    val isReachable: Boolean,
+    val nickname: String? = null,
+    val mac: String? = null,
+    val manufacturer: String? = null,
+    val pingMs: Long? = null
+)
+
+val MAC_OUI_MAP = mapOf(
+    "00:00:0c" to "Cisco",
+    "00:03:7f" to "Atheros",
+    "00:05:5d" to "D-Link",
+    "00:0d:4b" to "Roku",
+    "00:10:e0" to "Intel",
+    "00:11:22" to "Sony",
+    "00:14:22" to "Dell",
+    "00:16:3e" to "Xen",
+    "00:1c:c0" to "HP",
+    "00:1e:c9" to "Dell",
+    "00:21:70" to "Dell",
+    "00:23:45" to "Apple",
+    "00:25:00" to "Apple / Airport",
+    "00:26:bb" to "Apple",
+    "24:a0:74" to "Apple iDevice",
+    "28:cf:da" to "Apple iPhone",
+    "38:ca:da" to "Apple MacBook",
+    "3c:15:c2" to "Apple iPad",
+    "40:4d:7f" to "Apple",
+    "48:d7:05" to "Apple",
+    "50:bc:96" to "Apple",
+    "54:26:96" to "Apple",
+    "5c:ad:cf" to "Apple",
+    "60:03:08" to "Apple",
+    "64:20:0c" to "Apple",
+    "64:b9:e8" to "Apple",
+    "68:5b:35" to "Apple",
+    "6c:40:08" to "Apple",
+    "70:11:24" to "Apple",
+    "70:56:81" to "Apple",
+    "74:e1:b6" to "Apple",
+    "78:31:c1" to "Apple",
+    "7c:04:d0" to "Apple",
+    "7c:c5:37" to "Apple",
+    "80:49:71" to "Apple",
+    "80:ea:96" to "Apple",
+    "84:38:35" to "Sony",
+    "84:8e:0c" to "Apple",
+    "8c:2d:aa" to "Apple",
+    "8c:fe:57" to "Apple",
+    "90:27:e4" to "Apple",
+    "90:72:40" to "Apple",
+    "94:94:26" to "Apple",
+    "9c:04:eb" to "Apple",
+    "a4:77:33" to "Apple",
+    "a8:5b:78" to "Apple",
+    "a8:fa:d8" to "Apple",
+    "b8:09:8a" to "Apple",
+    "b8:17:c2" to "Apple",
+    "b8:27:eb" to "Raspberry Pi",
+    "b8:e8:56" to "Apple",
+    "c0:1a:da" to "Apple",
+    "c0:cc:f8" to "Apple",
+    "c8:1e:e7" to "Apple",
+    "c8:6e:31" to "Apple",
+    "c8:85:50" to "Apple",
+    "c8:b5:b7" to "Apple",
+    "cc:25:ef" to "Apple",
+    "cc:29:f5" to "Apple",
+    "d0:03:4b" to "Apple",
+    "d0:25:98" to "Apple",
+    "d0:a6:37" to "Apple",
+    "d4:dc:cd" to "Apple",
+    "d8:1c:79" to "Apple",
+    "d8:30:62" to "Apple",
+    "d8:a2:5e" to "Apple",
+    "d8:bb:2c" to "Apple",
+    "dc:2b:61" to "Apple",
+    "dc:41:5f" to "Apple",
+    "e0:b9:ba" to "Apple",
+    "e0:c9:7a" to "Apple",
+    "e0:db:55" to "Apple",
+    "e4:25:e9" to "Apple",
+    "e4:e4:ab" to "Apple",
+    "ec:2c:e2" to "Apple",
+    "ec:35:86" to "Apple",
+    "ec:ad:b8" to "Apple",
+    "f0:18:98" to "Apple",
+    "f0:79:60" to "Apple",
+    "f0:99:bf" to "Apple",
+    "f0:c1:f1" to "Apple",
+    "f4:0f:24" to "Apple",
+    "f4:1b:a1" to "Apple",
+    "f4:37:b7" to "Apple",
+    "f4:f9:51" to "Apple",
+    "fc:fc:48" to "Apple",
+    "00:1a:11" to "Google",
+    "3c:5a:37" to "Google Pixel",
+    "3c:5c:c4" to "Google",
+    "d8:eb:97" to "Google",
+    "f4:f5:d8" to "Google Nest",
+    "ec:1a:59" to "Samsung",
+    "1c:5a:3e" to "Samsung",
+    "dc:e5:35" to "Samsung",
+    "d0:37:42" to "Samsung",
+    "38:2d:c8" to "Samsung Galaxy",
+    "cc:3a:61" to "Samsung",
+    "00:23:76" to "HTC",
+    "00:0e:35" to "Intel",
+    "00:1b:21" to "Intel",
+    "00:21:5a" to "Intel Desktop/Laptop",
+    "10:4a:7d" to "Intel",
+    "a4:17:31" to "Intel",
+    "2c:56:dc" to "Intel Centrino",
+    "e4:a7:a0" to "Intel",
+    "fc:77:74" to "Intel WiFi Card",
+    "e8:4e:06" to "Intel",
+    "30:52:cb" to "Intel",
+    "e0:d5:5e" to "Intel",
+    "14:91:82" to "Intel Wireless",
+    "4c:34:88" to "Intel",
+    "70:cd:0d" to "Intel",
+    "7c:d3:0a" to "Intel",
+    "80:c5:f2" to "Intel Core",
+    "a0:c5:89" to "Intel",
+    "00:14:d1" to "TRENDnet",
+    "00:1d:73" to "Arista",
+    "34:57:60" to "Xiaomi",
+    "60:eed:f2" to "Xiaomi",
+    "9c:99:a0" to "Xiaomi Redmi",
+    "ac:c1:ee" to "Xiaomi Poco",
+    "d4:97:0b" to "Xiaomi",
+    "fc:64:3a" to "Xiaomi Smart Home",
+    "24:df:6a" to "Xiaomi",
+    "64:9a:12" to "Xiaomi",
+    "b0:3c:e5" to "Xiaomi",
+    "c0:2a:4d" to "Xiaomi",
+    "d8:15:0d" to "Xiaomi",
+    "e4:46:da" to "Xiaomi",
+    "00:1e:e5" to "Espressif IoT",
+    "24:0a:c4" to "Espressif ESP32",
+    "30:ae:a4" to "Espressif ESP8266",
+    "4c:11:ae" to "Espressif Systems",
+    "54:5a:a6" to "Espressif",
+    "68:c6:3a" to "Espressif",
+    "70:03:9f" to "Espressif",
+    "74:ec:b2" to "Espressif Systems",
+    "80:7d:3a" to "Espressif",
+    "84:0d:8e" to "Espressif",
+    "84:f3:eb" to "Espressif Systems",
+    "90:97:d5" to "Espressif ESP32-S3",
+    "a0:20:a6" to "Espressif",
+    "a4:7b:2c" to "Espressif Systems",
+    "ac:0b:fb" to "Espressif Systems",
+    "ac:d0:74" to "Espressif",
+    "b4:e6:2d" to "Espressif",
+    "c4:4f:33" to "Espressif Systems",
+    "c8:2b:96" to "Espressif",
+    "d8:a0:1d" to "Espressif Systems",
+    "e0:5a:1b" to "Espressif Systems",
+    "e8:68:e7" to "Espressif IoT"
+)
+
+fun lookupManufacturer(mac: String?): String {
+    if (mac.isNullOrEmpty() || mac == "00:00:00:00:00:00") return "Unknown Vendor"
+    val cleanMac = mac.replace(":", "").replace("-", "").lowercase()
+    if (cleanMac.length >= 6) {
+        val prefix = cleanMac.substring(0, 6)
+        val formattedPrefix = "${prefix.substring(0, 2)}:${prefix.substring(2, 4)}:${prefix.substring(4, 6)}"
+        return MAC_OUI_MAP[formattedPrefix] ?: "Generic Client"
+    }
+    return "Generic Client"
+}
 
 class MainActivity : ComponentActivity(), SensorEventListener {
 
@@ -187,6 +373,289 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     }
 }
 
+fun getActiveSubnets(): List<String> {
+    val subnets = mutableListOf<String>()
+    try {
+        val interfaces = NetworkInterface.getNetworkInterfaces()
+        if (interfaces != null) {
+            for (netInterface in Collections.list(interfaces)) {
+                if (netInterface.isLoopback) continue
+                val addresses = netInterface.inetAddresses ?: continue
+                for (address in Collections.list(addresses)) {
+                    if (!address.isLoopbackAddress && address is Inet4Address) {
+                        val ipStr = address.hostAddress ?: continue
+                        if (ipStr.startsWith("192.168.") || ipStr.startsWith("10.") || ipStr.startsWith("172.")) {
+                            val lastDot = ipStr.lastIndexOf('.')
+                            if (lastDot > 0) {
+                                subnets.add(ipStr.substring(0, lastDot + 1))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+    val list = subnets.distinct()
+    return if (list.isEmpty()) listOf("192.168.43.") else list
+}
+
+fun ipToNumericValue(ip: String): Long {
+    return try {
+        val parts = ip.split(".")
+        if (parts.size == 4) {
+            (parts[0].toLong() shl 24) + (parts[1].toLong() shl 16) + (parts[2].toLong() shl 8) + parts[3].toLong()
+        } else {
+            0L
+        }
+    } catch (e: Exception) {
+        0L
+    }
+}
+
+fun getPingLatency(ip: String): Long? {
+    try {
+        val startTime = System.currentTimeMillis()
+        val process = Runtime.getRuntime().exec(arrayOf("ping", "-c", "1", "-w", "1", ip))
+        val exitVal = process.waitFor()
+        if (exitVal == 0) {
+            val endTime = System.currentTimeMillis()
+            return (endTime - startTime).coerceAtLeast(1)
+        }
+    } catch (e: Exception) {}
+    return null
+}
+
+fun parseSystemHotspotDevices(sharedPrefs: android.content.SharedPreferences): List<HotspotClient> {
+    val deviceList = mutableMapOf<String, HotspotClient>()
+    
+    // Method A: Parse '/proc/net/arp'
+    try {
+        val arpReader = java.io.BufferedReader(java.io.FileReader("/proc/net/arp"))
+        arpReader.use { reader ->
+            var line: String? = reader.readLine()
+            while (line != null) {
+                // Ignore headers
+                if (!line.contains("IP address") && !line.contains("IP")) {
+                    val parts = line.split("\\s+".toRegex()).filter { it.isNotEmpty() }
+                    if (parts.size >= 4) {
+                        val ip = parts[0]
+                        val flags = parts[2]
+                        val mac = parts[3]
+                        
+                        if (ip.matches(Regex("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}"))) {
+                            val cleanMac = if (mac != "00:00:00:00:00:00") mac else null
+                            val manufacturer = if (cleanMac != null) lookupManufacturer(cleanMac) else "Connected Guest"
+                            val savedNickname = sharedPrefs.getString("device_nickname_$ip", null)
+                            
+                            deviceList[ip] = HotspotClient(
+                                ip = ip,
+                                hostname = null,
+                                isReachable = flags != "0x0",
+                                nickname = savedNickname,
+                                mac = cleanMac,
+                                manufacturer = manufacturer,
+                                pingMs = null
+                            )
+                        }
+                    }
+                }
+                line = reader.readLine()
+            }
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+
+    // Method B: Parse 'ip neighbor show'
+    try {
+        val process = Runtime.getRuntime().exec("ip neighbor show")
+        process.inputStream.bufferedReader().useLines { lines ->
+            lines.forEach { line ->
+                val parts = line.split("\\s+".toRegex()).filter { it.isNotEmpty() }
+                if (parts.isNotEmpty()) {
+                    val ip = parts[0]
+                    if (ip.matches(Regex("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}")) && !line.contains("FAILED")) {
+                        var mac: String? = null
+                        val lladdrIdx = parts.indexOf("lladdr")
+                        if (lladdrIdx != -1 && lladdrIdx + 1 < parts.size) {
+                            mac = parts[lladdrIdx + 1]
+                        }
+                        
+                        val isReachable = line.contains("REACHABLE") || line.contains("DELAY") || line.contains("STALE")
+                        val cleanMac = if (mac != "00:00:00:00:00:00") mac else null
+                        val manufacturer = if (cleanMac != null) lookupManufacturer(cleanMac) else "Connected Guest"
+                        val savedNickname = sharedPrefs.getString("device_nickname_$ip", null)
+                        
+                        val existing = deviceList[ip]
+                        if (existing == null) {
+                            deviceList[ip] = HotspotClient(
+                                ip = ip,
+                                hostname = null,
+                                isReachable = isReachable,
+                                nickname = savedNickname,
+                                mac = cleanMac,
+                                manufacturer = manufacturer,
+                                pingMs = null
+                            )
+                        } else {
+                            deviceList[ip] = existing.copy(
+                                mac = existing.mac ?: cleanMac,
+                                manufacturer = existing.manufacturer ?: manufacturer,
+                                isReachable = existing.isReachable || isReachable
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+    
+    return deviceList.values.toList()
+}
+
+suspend fun scanHotspotSubnet(
+    subnetPrefix: String,
+    onProgress: (Int, Int) -> Unit,
+    sharedPrefs: android.content.SharedPreferences
+): List<HotspotClient> = withContext(Dispatchers.IO) {
+    // 1. Fetch instantly known system neighbor clients
+    val systemFound = parseSystemHotspotDevices(sharedPrefs)
+    val systemFoundMap = systemFound.associateBy { it.ip }
+
+    val totalIps = 253 // .2 to .254
+    var completedCount = 0
+    val progressMutex = Any()
+    val semaphore = Semaphore(60) // 60 parallel tasks for rapid resolution
+
+    val jobs = (2..254).map { lastOctet ->
+        async {
+            semaphore.withPermit {
+                val ip = subnetPrefix + lastOctet
+                val knownExisting = systemFoundMap[ip]
+                var isAlive = knownExisting != null
+                var hostname: String? = null
+                val mac: String? = knownExisting?.mac
+                var manufacturer: String? = knownExisting?.manufacturer
+                var measuredPing: Long? = null
+
+                if (isAlive) {
+                    measuredPing = getPingLatency(ip)
+                }
+
+                if (!isAlive) {
+                    try {
+                        // Method 1: Quick native command line ping
+                        val process = Runtime.getRuntime().exec(arrayOf("ping", "-c", "1", "-w", "1", ip))
+                        val exitVal = process.waitFor()
+                        if (exitVal == 0) {
+                            isAlive = true
+                        }
+                    } catch (e: Exception) {}
+
+                    if (!isAlive) {
+                        try {
+                            // Method 2: Standard isReachable
+                            val address = InetAddress.getByName(ip)
+                            isAlive = address.isReachable(120)
+                        } catch (e: Exception) {}
+                    }
+
+                    if (!isAlive) {
+                        // Method 3: Port Probing for silent-firewall devices (e.g. Windows/Mac laptops)
+                        val portsToProbe = intArrayOf(5353, 135, 445, 139, 80, 443, 22, 62078)
+                        for (port in portsToProbe) {
+                            var socket: java.net.Socket? = null
+                            try {
+                                socket = java.net.Socket()
+                                socket.connect(java.net.InetSocketAddress(ip, port), 100)
+                                isAlive = true
+                                break
+                            } catch (e: java.net.ConnectException) {
+                                isAlive = true
+                                break
+                            } catch (e: Exception) {
+                                val msg = e.message ?: ""
+                                if (msg.contains("refused", ignoreCase = true) || msg.contains("reset", ignoreCase = true)) {
+                                    isAlive = true
+                                    break
+                                }
+                            } finally {
+                                try { socket?.close() } catch (ex: Exception) {}
+                            }
+                        }
+                    }
+
+                    if (isAlive) {
+                        measuredPing = getPingLatency(ip)
+                    }
+                }
+
+                if (isAlive) {
+                    try {
+                        val address = InetAddress.getByName(ip)
+                        val resolvedHost = address.hostName
+                        val canonical = address.canonicalHostName
+                        if (!resolvedHost.isNullOrEmpty() && resolvedHost != ip) {
+                            hostname = resolvedHost
+                        } else if (!canonical.isNullOrEmpty() && canonical != ip) {
+                            hostname = canonical
+                        }
+                    } catch (e: Exception) {}
+                }
+
+                synchronized(progressMutex) {
+                    completedCount++
+                    onProgress(completedCount, totalIps)
+                }
+
+                if (isAlive) {
+                    val savedNickname = sharedPrefs.getString("device_nickname_$ip", null)
+                    HotspotClient(
+                        ip = ip,
+                        hostname = hostname,
+                        isReachable = true,
+                        nickname = savedNickname,
+                        mac = mac,
+                        manufacturer = manufacturer ?: lookupManufacturer(mac),
+                        pingMs = measuredPing
+                    )
+                } else {
+                    null
+                }
+            }
+        }
+    }
+
+    val activeScanned = jobs.awaitAll().filterNotNull()
+    val combinedMap = mutableMapOf<String, HotspotClient>()
+    
+    // Seed with our system neighbor scan first
+    systemFound.forEach { client ->
+        combinedMap[client.ip] = client
+    }
+    
+    // Overlay scanning results (adds hostname + ping ms)
+    activeScanned.forEach { client ->
+        val existing = combinedMap[client.ip]
+        if (existing == null) {
+            combinedMap[client.ip] = client
+        } else {
+            combinedMap[client.ip] = existing.copy(
+                hostname = client.hostname ?: existing.hostname,
+                isReachable = true,
+                pingMs = client.pingMs ?: existing.pingMs
+            )
+        }
+    }
+
+    val results = combinedMap.values.toList().sortedBy { ipToNumericValue(it.ip) }
+    results
+}
+
 private fun isAccessibilityServiceEnabled(context: Context): Boolean {
     val service = "${context.packageName}/${VVPixelAccessibilityService::class.java.name}"
     val enabledServices = Settings.Secure.getString(
@@ -222,6 +691,25 @@ fun DashboardScreen(
 
 
     val sharedPrefs = remember(context) { context.getSharedPreferences("com.example.vvpixel.SETTINGS", Context.MODE_PRIVATE) }
+    
+    // Hotspot Clients states
+    val coroutineScope = rememberCoroutineScope()
+    var isScanningHotspot by remember { mutableStateOf(false) }
+    var scanProgress by remember { mutableStateOf(0f) }
+    val initialClients = remember(sharedPrefs) { parseSystemHotspotDevices(sharedPrefs) }
+    var detectedClients by remember { mutableStateOf<List<HotspotClient>>(initialClients) }
+    var selectedSubnetPrefix by remember { mutableStateOf("") }
+    var hasScannedInitially by remember { mutableStateOf(initialClients.isNotEmpty()) }
+    val detectedSubnets = remember(context) { getActiveSubnets() }
+    
+    if (selectedSubnetPrefix.isEmpty() && detectedSubnets.isNotEmpty()) {
+        selectedSubnetPrefix = detectedSubnets.first()
+    }
+    
+    // Nickname dialog state
+    var editingClientForNickname by remember { mutableStateOf<HotspotClient?>(null) }
+    var pendingNicknameInput by remember { mutableStateOf("") }
+
     var isDoubleTapEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("double_tap_to_lock_enabled", true)) }
     var isLockVibrationEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("lock_vibration_enabled", true)) }
     var isShakeTorchEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("shake_torch_enabled", true)) }
@@ -249,6 +737,13 @@ fun DashboardScreen(
                     hasDndPermission = nm?.isNotificationPolicyAccessGranted == true
                 } else {
                     hasDndPermission = true
+                }
+                
+                // Live refresh connected devices on screen focus
+                val res = parseSystemHotspotDevices(sharedPrefs)
+                if (res.isNotEmpty() || !hasScannedInitially) {
+                    detectedClients = res
+                    hasScannedInitially = true
                 }
                 
 
@@ -835,6 +1330,473 @@ fun DashboardScreen(
                     }
                 }
             }
+        }
+
+        // ================= SECTION 6: HOTSPOT CONNECTED DEVICES SCANNER =================
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = "Hotspot Clients",
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+            )
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    // Header Row with Router/Tethering representation
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Hotspot Client Monitor",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            )
+                            Text(
+                                text = "See who is connected to your portable Pixel hotspot",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Subnet selector chip list
+                    if (detectedSubnets.size > 1) {
+                        Text(
+                            text = "Choose subnet interface to scan:",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            detectedSubnets.forEach { prefix ->
+                                val isSelected = selectedSubnetPrefix == prefix
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primaryContainer 
+                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                            shape = RoundedCornerShape(20.dp)
+                                        )
+                                        .clickable {
+                                            if (!isScanningHotspot) {
+                                                selectedSubnetPrefix = prefix
+                                            }
+                                        }
+                                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "${prefix}x",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer 
+                                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(14.dp))
+                    } else {
+                        // Single subnet info label
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+                                .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Active adapter subnet range: ${selectedSubnetPrefix}x",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(14.dp))
+                    }
+
+                    // Progress indicators if scanning
+                    if (isScanningHotspot) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Scanning network clients...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${String.format("%.0f%%", scanProgress * 100)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = { scanProgress },
+                                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    // Scan actions
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                if (isScanningHotspot) {
+                                    isScanningHotspot = false
+                                } else {
+                                    isScanningHotspot = true
+                                    scanProgress = 0f
+                                    coroutineScope.launch {
+                                        try {
+                                            val results = scanHotspotSubnet(
+                                                selectedSubnetPrefix,
+                                                onProgress = { current, total ->
+                                                    scanProgress = current.toFloat() / total
+                                                },
+                                                sharedPrefs
+                                            )
+                                            if (isScanningHotspot) {
+                                                detectedClients = results
+                                                hasScannedInitially = true
+                                            }
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        } finally {
+                                            isScanningHotspot = false
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isScanningHotspot) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                contentColor = if (isScanningHotspot) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary
+                            )
+                        ) {
+                            Icon(
+                                imageVector = if (isScanningHotspot) Icons.Default.Close else Icons.Default.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                if (isScanningHotspot) "Stop Scan" else "Scan Connections",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                    }
+
+                    // Scan Results area
+                    if (hasScannedInitially || detectedClients.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = "Detected Hosts (${detectedClients.size})",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+
+                        if (detectedClients.isEmpty()) {
+                            // Empty States
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.WifiOff,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(36.dp)
+                                )
+                                Text(
+                                    text = "No active clients found on this range",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    text = "Double check that your device's hotspot is toggled on, and a guest device is connected, then try scanning again.",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                )
+                            }
+                        } else {
+                            // Active list of clients
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                detectedClients.forEach { client ->
+                                    val ipLastOctet = client.ip.substringAfterLast(".").toIntOrNull() ?: 0
+                                    val avatarColors = listOf(
+                                        Color(0xFFE57373), Color(0xFFF06292), Color(0xFFBA68C8),
+                                        Color(0xFF9575CD), Color(0xFF7986CB), Color(0xFF64B5F6),
+                                        Color(0xFF4FC3F7), Color(0xFF4DD0E1), Color(0xFF4DB6AC),
+                                        Color(0xFF81C784), Color(0xFFAED581), Color(0xFFFFB74D)
+                                    )
+                                    val avatarBgColor = avatarColors[ipLastOctet % avatarColors.size]
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
+                                            .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f), RoundedCornerShape(20.dp))
+                                            .padding(14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Left: IP Last Octet Avatar with a dynamic status pulse indicator
+                                        Box(
+                                            modifier = Modifier.size(44.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .background(avatarBgColor),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = client.nickname?.take(1)?.uppercase() ?: (client.hostname?.take(1)?.uppercase() ?: ipLastOctet.toString()),
+                                                    color = Color.White,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    style = MaterialTheme.typography.bodyLarge
+                                                )
+                                            }
+                                            
+                                            // Status pulsing green dot on bottom-right corner of avatar to show active connection
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(12.dp)
+                                                    .align(Alignment.BottomEnd)
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(Color(0xFF4CAF50))
+                                                    .border(2.dp, MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(14.dp))
+
+                                        // Center: IP, resolved details, and copy handler
+                                        val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+                                        Column(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable {
+                                                    try {
+                                                        clipboardManager.setText(androidx.compose.ui.text.buildAnnotatedString { append(client.ip) })
+                                                        Toast.makeText(context, "Copied IP: ${client.ip}", Toast.LENGTH_SHORT).show()
+                                                    } catch (e: Exception) {}
+                                                }
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = client.nickname ?: client.hostname ?: "Guest Client",
+                                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                // Optional manufacturer indicator
+                                                val mfg = client.manufacturer ?: "Generic"
+                                                if (mfg != "Generic Client" && mfg != "Generic") {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp))
+                                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = mfg,
+                                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            
+                                            Text(
+                                                text = "IP: ${client.ip} (Tap to copy)" + if (client.hostname != null && client.nickname != null) " • ${client.hostname}" else "",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            
+                                            if (!client.mac.isNullOrEmpty()) {
+                                                Text(
+                                                    text = "MAC: ${client.mac.uppercase()}",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, letterSpacing = 0.5.sp),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                                                )
+                                            }
+                                        }
+
+                                        // Latency visualizer & Nickname Edit button
+                                        Column(
+                                            horizontalAlignment = Alignment.End,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            if (client.pingMs != null) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(6.dp))
+                                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "⚡ ${client.pingMs} ms",
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                    )
+                                                }
+                                            }
+                                            
+                                            IconButton(
+                                                onClick = {
+                                                    editingClientForNickname = client
+                                                    pendingNicknameInput = client.nickname ?: ""
+                                                },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Edit,
+                                                    contentDescription = "Edit Nickname",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Dialog for editing device nicknames
+        editingClientForNickname?.let { client ->
+            AlertDialog(
+                onDismissRequest = { editingClientForNickname = null },
+                title = { Text("Set Device Nickname") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Assign a friendly name for ${client.ip} to recognize it on future scans.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = pendingNicknameInput,
+                            onValueChange = { pendingNicknameInput = it },
+                            label = { Text("Device Nickname") },
+                            placeholder = { Text("e.g. My Laptop, Dad's Phone") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val ip = client.ip
+                            sharedPrefs.edit().putString("device_nickname_$ip", pendingNicknameInput.trim()).apply()
+                            
+                            // Instantly update current view's list
+                            detectedClients = detectedClients.map {
+                                if (it.ip == ip) {
+                                    it.copy(nickname = pendingNicknameInput.trim().takeIf { s -> s.isNotEmpty() })
+                                } else {
+                                    it
+                                }
+                            }
+                            editingClientForNickname = null
+                        }
+                    ) {
+                        Text("Save")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { editingClientForNickname = null }) {
+                        Text("Cancel")
+                    }
+                },
+                shape = RoundedCornerShape(24.dp)
+            )
         }
 
         // ================= SECTION 5: PERMISSIONS COLLAPSIBLE CARD =================
