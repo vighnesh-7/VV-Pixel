@@ -16,21 +16,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.ui.theme.MyApplicationTheme
 
 class VolumeControlActivity : ComponentActivity() {
@@ -38,16 +31,14 @@ class VolumeControlActivity : ComponentActivity() {
     private lateinit var audioManager: AudioManager
     private var isReceiverRegistered = false
 
-    // State flows to update UI when physical buttons are pressed
     private var mediaVolState = mutableIntStateOf(0)
-    private var ringVolState = mutableIntStateOf(0)
-    private var notificationVolState = mutableIntStateOf(0)
-    private var alarmVolState = mutableIntStateOf(0)
+    private var isMutedState  = mutableStateOf(false)
+    private var preMuteVolume = 0
 
     private val volumeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == "android.media.VOLUME_CHANGED_ACTION") {
-                updateVolumeStates()
+                refreshFromSystem()
             }
         }
     }
@@ -59,7 +50,6 @@ class VolumeControlActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             window.setBackgroundBlurRadius(80)
         }
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -73,32 +63,45 @@ class VolumeControlActivity : ComponentActivity() {
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-
-        updateVolumeStates()
-
-        // Register broadcast receiver for physical volume button updates
-        val filter = IntentFilter("android.media.VOLUME_CHANGED_ACTION")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(volumeReceiver, filter, RECEIVER_EXPORTED)
-        } else {
-            registerReceiver(volumeReceiver, filter)
-        }
-        isReceiverRegistered = true
+        refreshFromSystem()
 
         setContent {
             MyApplicationTheme {
-                VolumeOverlayScreen(
-                    currentMedia = mediaVolState.intValue,
-                    maxMedia = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC),
-                    currentRing = ringVolState.intValue,
-                    maxRing = audioManager.getStreamMaxVolume(AudioManager.STREAM_RING),
-                    currentNotification = notificationVolState.intValue,
-                    maxNotification = audioManager.getStreamMaxVolume(AudioManager.STREAM_NOTIFICATION),
-                    currentAlarm = alarmVolState.intValue,
-                    maxAlarm = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM),
-                    onVolumeChanged = { streamType, newValue ->
-                        audioManager.setStreamVolume(streamType, newValue, 0)
-                        updateVolumeStates()
+                // FIX (root cause 4): volume change callbacks defined INSIDE
+                // the composable scope so they are never stale closures.
+                // The old code used remember<(Int)->Unit> {} which froze the
+                // lambda at first composition — if the activity state changed
+                // before the user's first interaction, the callback was
+                // calling the original (now-stale) onVolumeChange. Defining
+                // them here means they always close over the current AudioManager
+                // and mutableState references, which are stable across
+                // recompositions.
+                val cs = MaterialTheme.colorScheme
+                val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+
+                VolumeBarOverlayScreen(
+                    currentVolume = mediaVolState.intValue,
+                    maxVolume     = maxVol,
+                    isMuted       = isMutedState.value,
+                    onVolumeChange = { newValue ->
+                        if (isMutedState.value) isMutedState.value = false
+                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newValue, 0)
+                        refreshFromSystem()
+                    },
+                    onMuteToggle = {
+                        if (isMutedState.value) {
+                            audioManager.setStreamVolume(
+                                AudioManager.STREAM_MUSIC,
+                                preMuteVolume.coerceAtLeast(1),
+                                0
+                            )
+                            isMutedState.value = false
+                        } else {
+                            preMuteVolume = mediaVolState.intValue
+                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
+                            isMutedState.value = true
+                        }
+                        refreshFromSystem()
                     },
                     onDismiss = { finish() }
                 )
@@ -106,32 +109,54 @@ class VolumeControlActivity : ComponentActivity() {
         }
     }
 
-    private fun updateVolumeStates() {
-        mediaVolState.intValue = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-        ringVolState.intValue = audioManager.getStreamVolume(AudioManager.STREAM_RING)
-        notificationVolState.intValue = audioManager.getStreamVolume(AudioManager.STREAM_NOTIFICATION)
-        alarmVolState.intValue = audioManager.getStreamVolume(AudioManager.STREAM_ALARM)
+    override fun onStart() {
+        super.onStart()
+        if (!isReceiverRegistered) {
+            val filter = IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(volumeReceiver, filter, RECEIVER_EXPORTED)
+            } else {
+                registerReceiver(volumeReceiver, filter)
+            }
+            isReceiverRegistered = true
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (isReceiverRegistered) {
+            try { unregisterReceiver(volumeReceiver) } catch (e: Exception) {}
+            isReceiverRegistered = false
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        refreshFromSystem()
+    }
+
+    private fun refreshFromSystem() {
+        val vol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        mediaVolState.intValue = vol
+        if (vol == 0 && !isMutedState.value) isMutedState.value = true
+        else if (vol > 0 && isMutedState.value) isMutedState.value = false
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        // Intercept volume buttons to show changes dynamically and play standard system sounds
         when (keyCode) {
             KeyEvent.KEYCODE_VOLUME_UP -> {
+                if (isMutedState.value) isMutedState.value = false
                 audioManager.adjustStreamVolume(
-                    AudioManager.STREAM_MUSIC,
-                    AudioManager.ADJUST_RAISE,
-                    AudioManager.FLAG_PLAY_SOUND
+                    AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_PLAY_SOUND
                 )
-                updateVolumeStates()
+                refreshFromSystem()
                 return true
             }
             KeyEvent.KEYCODE_VOLUME_DOWN -> {
                 audioManager.adjustStreamVolume(
-                    AudioManager.STREAM_MUSIC,
-                    AudioManager.ADJUST_LOWER,
-                    AudioManager.FLAG_PLAY_SOUND
+                    AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_PLAY_SOUND
                 )
-                updateVolumeStates()
+                refreshFromSystem()
                 return true
             }
         }
@@ -141,193 +166,115 @@ class VolumeControlActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         if (isReceiverRegistered) {
-            try {
-                unregisterReceiver(volumeReceiver)
-            } catch (e: Exception) {
-                // Ignore
-            }
+            try { unregisterReceiver(volumeReceiver) } catch (e: Exception) {}
+            isReceiverRegistered = false
         }
     }
 }
 
 @Composable
-fun VolumeOverlayScreen(
-    currentMedia: Int,
-    maxMedia: Int,
-    currentRing: Int,
-    maxRing: Int,
-    currentNotification: Int,
-    maxNotification: Int,
-    currentAlarm: Int,
-    maxAlarm: Int,
-    onVolumeChanged: (Int, Int) -> Unit,
+fun VolumeBarOverlayScreen(
+    currentVolume: Int,
+    maxVolume: Int,
+    isMuted: Boolean,
+    onVolumeChange: (Int) -> Unit,
+    onMuteToggle: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    // Automatically dismiss the overlay after 3.5 seconds of inactivity (such as physical button presses or slider changes)
-    val stateTracker = remember(currentMedia, currentRing, currentNotification, currentAlarm) {
-        System.currentTimeMillis() // Triggers LaunchedEffect cancellation/re-trigger when states change
-    }
-    
-    LaunchedEffect(stateTracker) {
-        kotlinx.coroutines.delay(3500)
-        onDismiss()
+    val cs = MaterialTheme.colorScheme
+
+    // Auto-dismiss: single polling loop keyed on Unit, not re-triggered
+    // on every recomposition. Interaction timestamp updated explicitly.
+    var lastInteractionAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            val remaining = 3500L - (System.currentTimeMillis() - lastInteractionAt)
+            if (remaining <= 0L) { onDismiss(); break }
+            kotlinx.coroutines.delay(remaining.coerceAtLeast(100L))
+        }
     }
 
-    // Fill the screen with semi-transparent backdrop
+    // Scrim — tap anywhere outside the card to dismiss
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                androidx.compose.ui.graphics.Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0x22FFFFFF), // highly reflective light gloss
-                        Color(0x06888888), // neutral liquid shimmer
-                        Color(0x1F121214)  // subtle glass base
-                    )
-                )
-            )
+            .background(Color.Black.copy(alpha = 0.25f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { onDismiss() },
         contentAlignment = Alignment.Center
     ) {
-        // Outer interactive dialog box, styling aligned with Google Pixel volume slider aesthetics
-        Card(
+        // ── iOS 26 liquid-glass card ──────────────────────────────────────
+        // window.setBackgroundBlurRadius(80) in onCreate already blurs
+        // what's behind the entire window. This card sits on top of that
+        // blurred layer. The layered-gradient approach here adds the
+        // translucent frosted-glass fill, top-edge specular rim, and a
+        // subtle border — matching the iOS 26 reference without needing
+        // a second live-blur pass.
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.85f)
+                .fillMaxWidth(0.9f)
+                .clip(RoundedCornerShape(32.dp))
+                // Layer 1: frosted translucent base
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            cs.surface.copy(alpha = 0.45f),
+                            cs.surfaceVariant.copy(alpha = 0.30f)
+                        )
+                    )
+                )
+                // Layer 2: specular highlight along the top edge, same as
+                // the iOS glass capsule treatment
+                .background(
+                    Brush.verticalGradient(
+                        0.0f to Color.White.copy(alpha = 0.18f),
+                        0.15f to Color.White.copy(alpha = 0.04f),
+                        1.0f to Color.Transparent
+                    )
+                )
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
-                ) { /* Consume clicks to avoid dismiss */ },
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+                ) { /* consume — don't dismiss */ }
         ) {
+            // Hairline border rendered as a nested Box so it sits above both
+            // gradient layers without affecting layout dimensions.
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.22f),
+                                Color.White.copy(alpha = 0.04f)
+                            )
+                        ),
+                        shape = RoundedCornerShape(32.dp)
+                    )
+            )
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(horizontal = 20.dp, vertical = 22.dp)
             ) {
-                Text(
-                    text = "VV Volume Panel",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                // Slider Row - Media
-                VolumeSliderItem(
-                    title = "Media",
-                    icon = Icons.Filled.MusicNote,
-                    current = currentMedia,
-                    max = maxMedia,
-                    onValueChange = { onVolumeChanged(AudioManager.STREAM_MUSIC, it) }
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Slider Row - Ring
-                VolumeSliderItem(
-                    title = "Ringtone",
-                    icon = Icons.Filled.VolumeUp,
-                    current = currentRing,
-                    max = maxRing,
-                    onValueChange = { onVolumeChanged(AudioManager.STREAM_RING, it) }
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Slider Row - Notifications
-                if (maxNotification > 0) {
-                    VolumeSliderItem(
-                        title = "Notifications",
-                        icon = Icons.Filled.Notifications,
-                        current = currentNotification,
-                        max = maxNotification,
-                        onValueChange = { onVolumeChanged(AudioManager.STREAM_NOTIFICATION, it) }
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                // Slider Row - Alarm
-                VolumeSliderItem(
-                    title = "Alarm",
-                    icon = Icons.Filled.Alarm,
-                    current = currentAlarm,
-                    max = maxAlarm,
-                    onValueChange = { onVolumeChanged(AudioManager.STREAM_ALARM, it) }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Button(
-                    onClick = { onDismiss() },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    shape = RoundedCornerShape(100.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(text = "Dismiss", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun VolumeSliderItem(
-    title: String,
-    icon: ImageVector,
-    current: Int,
-    max: Int,
-    onValueChange: (Int) -> Unit
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = "$title Icon",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                VolumeProgressBar(
+                    currentVolume = currentVolume,
+                    maxVolume     = maxVolume,
+                    isMuted       = isMuted,
+                    onVolumeChange = { v ->
+                        lastInteractionAt = System.currentTimeMillis()
+                        onVolumeChange(v)
+                    },
+                    onMuteToggle = {
+                        lastInteractionAt = System.currentTimeMillis()
+                        onMuteToggle()
+                    }
                 )
             }
-            Text(
-                text = "$current / $max",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-            )
         }
-        
-        Slider(
-            value = current.toFloat(),
-            valueRange = 0f..max.toFloat(),
-            steps = if (max > 1) max - 1 else 0,
-            onValueChange = { onValueChange(it.toInt()) },
-            colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
     }
 }
