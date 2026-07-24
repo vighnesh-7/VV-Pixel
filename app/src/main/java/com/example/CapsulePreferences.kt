@@ -27,6 +27,7 @@ object CapsulePreferences {
     const val KEY_SLIDER_STYLE = "slider_style" // "THIN", "PILL"
     const val KEY_VIBRATION = "vibration"
     const val KEY_SHOW_SLIDER = "show_slider"
+    const val KEY_WAVE_ANIMATED = "wave_animated"
     const val KEY_COLLAPSE_DELAY = "collapse_delay" // seconds: 0 (Instantly), 1, 2, 3, 5, 10, -1 (Never)
 
     const val KEY_NOTIF_AUTOHIDE = "notif_autohide_delay" // seconds
@@ -51,6 +52,7 @@ object CapsulePreferences {
         val sliderStyle: String = "THIN",
         val vibration: Boolean = true,
         val showSlider: Boolean = false,
+        val waveAnimated: Boolean = true,
         val collapseDelay: Int = 3,
 
         val notificationAutohideDelay: Int = 3,
@@ -90,6 +92,7 @@ object CapsulePreferences {
             sliderStyle = p.getString(KEY_SLIDER_STYLE, "THIN") ?: "THIN",
             vibration = p.getBoolean(KEY_VIBRATION, true),
             showSlider = p.getBoolean(KEY_SHOW_SLIDER, false),
+            waveAnimated = p.getBoolean(KEY_WAVE_ANIMATED, true),
             collapseDelay = p.getInt(KEY_COLLAPSE_DELAY, 3),
 
             notificationAutohideDelay = p.getInt(KEY_NOTIF_AUTOHIDE, 3),
@@ -120,6 +123,7 @@ object CapsulePreferences {
             putString(KEY_SLIDER_STYLE, newState.sliderStyle)
             putBoolean(KEY_VIBRATION, newState.vibration)
             putBoolean(KEY_SHOW_SLIDER, newState.showSlider)
+            putBoolean(KEY_WAVE_ANIMATED, newState.waveAnimated)
             putInt(KEY_COLLAPSE_DELAY, newState.collapseDelay)
 
             putInt(KEY_NOTIF_AUTOHIDE, newState.notificationAutohideDelay)

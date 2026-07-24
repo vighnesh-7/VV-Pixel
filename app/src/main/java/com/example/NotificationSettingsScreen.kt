@@ -2,6 +2,7 @@ package com.example
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -23,6 +24,8 @@ import androidx.compose.ui.unit.dp
 fun NotificationSettingsScreen(
     onBack: () -> Unit
 ) {
+    BackHandler(onBack = onBack)
+
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val state by CapsulePreferences.stateFlow.collectAsState()

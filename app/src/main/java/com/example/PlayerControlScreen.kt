@@ -1,6 +1,7 @@
 package com.example
 
 import android.graphics.Bitmap
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +28,8 @@ import androidx.compose.ui.unit.sp
 fun PlayerControlScreen(
     onBack: () -> Unit
 ) {
+    BackHandler(onBack = onBack)
+
     val scrollState = rememberScrollState()
     val state by CapsulePreferences.stateFlow.collectAsState()
 
@@ -218,6 +221,20 @@ fun PlayerControlScreen(
                         label = { Text(opt) }
                     )
                 }
+            }
+
+            Text("Music Background Wave Motion", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = state.waveAnimated,
+                    onClick = { CapsulePreferences.update { it.copy(waveAnimated = true) } },
+                    label = { Text("Moving Waves") }
+                )
+                FilterChip(
+                    selected = !state.waveAnimated,
+                    onClick = { CapsulePreferences.update { it.copy(waveAnimated = false) } },
+                    label = { Text("Static Waves") }
+                )
             }
 
             // 8. Seek bar & Vibration switches

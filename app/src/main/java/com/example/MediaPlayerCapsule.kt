@@ -202,6 +202,7 @@ fun MediaPlayerCapsule(
                 waveColor = waveColor,
                 isPlaying = data.isPlaying,
                 isExpanded = true,
+                isAnimated = prefs.waveAnimated,
                 modifier = Modifier.fillMaxSize()
             )
 

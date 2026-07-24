@@ -3,14 +3,20 @@ package com.example
 import android.content.Context
 import android.media.AudioManager
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 
 enum class CapsuleMode {
     MEDIA,
@@ -42,14 +48,41 @@ fun CapsuleOverlay(
     onMuteToggle: () -> Unit,
     onOpenNotification: () -> Unit,
     onNotifActionClick: (android.app.PendingIntent) -> Unit,
+    onSwipeDismiss: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (mode == CapsuleMode.NONE) return
 
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    val animatedOffsetX by animateFloatAsState(
+        targetValue = offsetX,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "capsule_swipe_offset"
+    )
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 8.dp),
+            .padding(top = 8.dp)
+            .offset { IntOffset(animatedOffsetX.roundToInt(), 0) }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        if (offsetX > 120f) {
+                            onSwipeDismiss()
+                        }
+                        offsetX = 0f
+                    },
+                    onDragCancel = {
+                        offsetX = 0f
+                    },
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        val next = offsetX + dragAmount
+                        offsetX = next.coerceAtLeast(0f)
+                    }
+                )
+            },
         contentAlignment = Alignment.TopCenter
     ) {
         AnimatedContent(

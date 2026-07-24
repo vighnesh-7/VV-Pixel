@@ -33,7 +33,15 @@ fun DynamicCapsuleSettingsSection(
     val state by CapsulePreferences.stateFlow.collectAsState()
 
     var isServiceRunning by remember { mutableStateOf(DynamicCapsuleService.isServiceRunning) }
-    val hasOverlayPermission = remember(context) { Settings.canDrawOverlays(context) }
+    var hasOverlayPermission by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    var hasNotifListenerPermission by remember { mutableStateOf(DynamicCapsuleNotifListener.isConnected(context)) }
+
+    // Re-check permissions when composable is active
+    DisposableEffect(Unit) {
+        hasOverlayPermission = Settings.canDrawOverlays(context)
+        hasNotifListenerPermission = DynamicCapsuleNotifListener.isConnected(context)
+        onDispose { }
+    }
 
     fun startOrStopService(enable: Boolean) {
         if (enable) {
@@ -46,6 +54,14 @@ fun DynamicCapsuleSettingsSection(
                 context.startActivity(intent)
                 return
             }
+
+            if (!DynamicCapsuleNotifListener.isConnected(context)) {
+                Toast.makeText(context, "Notification Listener required for Music detection!", Toast.LENGTH_LONG).show()
+                val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                context.startActivity(intent)
+                return
+            }
+
             val intent = Intent(context, DynamicCapsuleService::class.java)
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -71,6 +87,76 @@ fun DynamicCapsuleSettingsSection(
             ),
             modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
         )
+
+        // Permission Banners if missing
+        if (!hasOverlayPermission || !hasNotifListenerPermission) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                ),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Permissions Required for Dynamic Capsule",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+
+                    if (!hasOverlayPermission) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Display over other apps", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                                Text("Required for floating capsule UI", style = MaterialTheme.typography.labelSmall)
+                            }
+                            Button(
+                                onClick = {
+                                    val intent = Intent(
+                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:${context.packageName}")
+                                    )
+                                    context.startActivity(intent)
+                                },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("Grant", fontSize = 12.sp)
+                            }
+                        }
+                    }
+
+                    if (!hasNotifListenerPermission) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Notification Listener Access", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                                Text("Required for Spotify/Music playback session detection", style = MaterialTheme.typography.labelSmall)
+                            }
+                            Button(
+                                onClick = {
+                                    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                                    context.startActivity(intent)
+                                },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("Grant", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -129,66 +215,70 @@ fun DynamicCapsuleSettingsSection(
                     )
                 }
 
-                if (isServiceRunning || true) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                    // Row 1: Player Control
-                    CapsuleFeatureRow(
-                        title = "Player Control",
-                        subtitle = "Media playback wave & controls",
-                        icon = Icons.Default.PlayCircle,
-                        checked = state.playerEnabled,
-                        onCheckedChange = { enabled ->
-                            CapsulePreferences.update { it.copy(playerEnabled = enabled) }
-                        },
-                        onClick = onOpenPlayerCustomization
-                    )
-
-                    // Row 2: Volume Control
-                    CapsuleFeatureRow(
-                        title = "Volume Control",
-                        subtitle = "Visual floating volume slider board",
-                        icon = Icons.Default.VolumeUp,
-                        checked = state.volumeEnabled,
-                        onCheckedChange = { enabled ->
-                            CapsulePreferences.update { it.copy(volumeEnabled = enabled) }
+                // Row 1: Player Control
+                CapsuleFeatureRow(
+                    title = "Player Control",
+                    subtitle = "Media playback wave & controls",
+                    icon = Icons.Default.PlayCircle,
+                    checked = state.playerEnabled,
+                    onCheckedChange = { enabled ->
+                        if (enabled && !DynamicCapsuleNotifListener.isConnected(context)) {
+                            Toast.makeText(context, "Notification Listener needed for Music Detection", Toast.LENGTH_LONG).show()
+                            try {
+                                context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                            } catch (e: Exception) { }
                         }
-                    )
+                        CapsulePreferences.update { it.copy(playerEnabled = enabled) }
+                    },
+                    onClick = onOpenPlayerCustomization
+                )
 
-                    // Row 3: App Progress
-                    CapsuleFeatureRow(
-                        title = "App Progress",
-                        subtitle = "Live download & install progress pill",
-                        icon = Icons.Default.Download,
-                        checked = state.progressEnabled,
-                        onCheckedChange = { enabled ->
-                            CapsulePreferences.update { it.copy(progressEnabled = enabled) }
-                        }
-                    )
+                // Row 2: Volume Control
+                CapsuleFeatureRow(
+                    title = "Volume Control",
+                    subtitle = "Visual floating volume slider board",
+                    icon = Icons.Default.VolumeUp,
+                    checked = state.volumeEnabled,
+                    onCheckedChange = { enabled ->
+                        CapsulePreferences.update { it.copy(volumeEnabled = enabled) }
+                    }
+                )
 
-                    // Row 4: Timer / Stopwatch
-                    CapsuleFeatureRow(
-                        title = "Timer / Stopwatch",
-                        subtitle = "Clock countdowns & stopwatch overlay",
-                        icon = Icons.Default.Timer,
-                        checked = state.timerEnabled,
-                        onCheckedChange = { enabled ->
-                            CapsulePreferences.update { it.copy(timerEnabled = enabled) }
-                        }
-                    )
+                // Row 3: App Progress
+                CapsuleFeatureRow(
+                    title = "App Progress",
+                    subtitle = "Live download & install progress pill",
+                    icon = Icons.Default.Download,
+                    checked = state.progressEnabled,
+                    onCheckedChange = { enabled ->
+                        CapsulePreferences.update { it.copy(progressEnabled = enabled) }
+                    }
+                )
 
-                    // Row 5: Notification Capsule
-                    CapsuleFeatureRow(
-                        title = "Notification Capsule",
-                        subtitle = "Nothing Phone black pill notifications",
-                        icon = Icons.Default.Notifications,
-                        checked = state.notificationEnabled,
-                        onCheckedChange = { enabled ->
-                            CapsulePreferences.update { it.copy(notificationEnabled = enabled) }
-                        },
-                        onClick = onOpenNotificationCustomization
-                    )
-                }
+                // Row 4: Timer / Stopwatch
+                CapsuleFeatureRow(
+                    title = "Timer / Stopwatch",
+                    subtitle = "Clock countdowns & stopwatch overlay",
+                    icon = Icons.Default.Timer,
+                    checked = state.timerEnabled,
+                    onCheckedChange = { enabled ->
+                        CapsulePreferences.update { it.copy(timerEnabled = enabled) }
+                    }
+                )
+
+                // Row 5: Notification Capsule
+                CapsuleFeatureRow(
+                    title = "Notification Capsule",
+                    subtitle = "Nothing Phone black pill notifications",
+                    icon = Icons.Default.Notifications,
+                    checked = state.notificationEnabled,
+                    onCheckedChange = { enabled ->
+                        CapsulePreferences.update { it.copy(notificationEnabled = enabled) }
+                    },
+                    onClick = onOpenNotificationCustomization
+                )
             }
         }
     }

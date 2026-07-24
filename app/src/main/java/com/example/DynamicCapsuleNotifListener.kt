@@ -26,6 +26,14 @@ class DynamicCapsuleNotifListener : NotificationListenerService() {
         private val _notifDataFlow = MutableStateFlow<NotificationCapsuleData?>(null)
         val notifDataFlow: StateFlow<NotificationCapsuleData?> = _notifDataFlow.asStateFlow()
 
+        fun clearNotifData() {
+            _notifDataFlow.value = null
+        }
+
+        fun clearProgressData() {
+            _progressDataFlow.value = null
+        }
+
         fun isConnected(context: Context): Boolean {
             val enabledListeners = android.provider.Settings.Secure.getString(
                 context.contentResolver,

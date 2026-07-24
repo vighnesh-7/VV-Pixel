@@ -15,6 +15,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.runtime.*
@@ -38,6 +40,7 @@ import kotlinx.coroutines.flow.collectLatest
 class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
     companion object {
+        const val TAG = "DynamicCapsule"
         const val CHANNEL_ID = "vvpixel_capsule_channel"
         const val NOTIF_ID = 9001
         var isServiceRunning = false
@@ -62,6 +65,7 @@ class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
     // Media & Volume state
     private var mediaSessionManager: MediaSessionManager? = null
     private var activeMediaController: MediaController? = null
+    private var activeMediaCallback: MediaController.Callback? = null
     private var audioManager: AudioManager? = null
 
     private var mediaDataState by mutableStateOf(MediaPlaybackData())
@@ -76,6 +80,7 @@ class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
     // Delay auto-collapse handler
     private val collapseHandler = Handler(Looper.getMainLooper())
     private val collapseRunnable = Runnable {
+        Log.d(TAG, "Auto-collapse triggered")
         isExpandedState = false
         updateWindowFlags()
     }
@@ -89,6 +94,13 @@ class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
         isServiceRunning = true
 
         CapsulePreferences.init(this)
+
+        if (!Settings.canDrawOverlays(this)) {
+            Log.w(TAG, "Overlay permission not granted. Stopping DynamicCapsuleService.")
+            stopSelf()
+            return
+        }
+
         createNotificationChannel()
         startForeground(NOTIF_ID, createNotification())
 
@@ -110,6 +122,16 @@ class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
         // Observe Notification Listener state
         serviceScope.launch {
             combineFlows()
+        }
+
+        // Periodic check to discover active media sessions (e.g. if player starts after service)
+        serviceScope.launch {
+            while (isActive) {
+                delay(3000L)
+                if (CapsulePreferences.stateFlow.value.playerEnabled) {
+                    discoverMediaSessions()
+                }
+            }
         }
 
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
@@ -144,6 +166,7 @@ class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
                 !prefs.notificationEnabled
 
         if (allDisabled) {
+            Log.d(TAG, "All capsule features disabled, stopping service.")
             stopSelf()
         }
     }
@@ -167,6 +190,7 @@ class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
                         volMutedState = isMute
 
                         if (changed && CapsulePreferences.stateFlow.value.volumeEnabled) {
+                            Log.d(TAG, "Volume changed: $newVol, mute: $isMute")
                             triggerVolumeCapsule()
                         }
                     }
@@ -186,6 +210,11 @@ class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
     }
 
     private fun setupMediaListener() {
+        Log.d(TAG, "setupMediaListener initializing")
+        if (!DynamicCapsuleNotifListener.isConnected(this)) {
+            Log.w(TAG, "Notification Listener permission not granted! Media sessions cannot be read.")
+        }
+
         try {
             mediaSessionManager = getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
             val componentName = android.content.ComponentName(this, DynamicCapsuleNotifListener::class.java)
@@ -193,50 +222,129 @@ class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 mediaSessionManager?.addOnActiveSessionsChangedListener(
                     { controllers ->
-                        controllers?.firstOrNull()?.let { attachMediaController(it) }
+                        Log.d(TAG, "Active media sessions changed: count=${controllers?.size ?: 0}")
+                        selectAndAttachMediaController(controllers)
                     },
                     componentName
                 )
 
-                val controllers = mediaSessionManager?.getActiveSessions(componentName)
-                controllers?.firstOrNull()?.let { attachMediaController(it) }
+                discoverMediaSessions()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Error in setupMediaListener", e)
         }
     }
 
-    private fun attachMediaController(controller: MediaController) {
-        activeMediaController = controller
-        updateMediaMetadata(controller.metadata)
-        updateMediaPlaybackState(controller.playbackState)
+    private fun discoverMediaSessions() {
+        try {
+            val componentName = android.content.ComponentName(this, DynamicCapsuleNotifListener::class.java)
+            val controllers = mediaSessionManager?.getActiveSessions(componentName)
+            if (!controllers.isNullOrEmpty()) {
+                selectAndAttachMediaController(controllers)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get active media sessions", e)
+        }
+    }
 
-        controller.registerCallback(object : MediaController.Callback() {
+    private fun selectAndAttachMediaController(controllers: List<MediaController>?) {
+        if (controllers.isNullOrEmpty()) {
+            if (activeMediaController != null) {
+                Log.d(TAG, "No active controllers found, detaching current controller")
+                detachCurrentMediaController()
+                reevaluateCapsuleMode(CapsulePreferences.stateFlow.value)
+            }
+            return
+        }
+
+        val playingController = controllers.firstOrNull {
+            it.playbackState?.state == PlaybackState.STATE_PLAYING
+        } ?: controllers.firstOrNull()
+
+        playingController?.let { attachMediaController(it) }
+    }
+
+    private fun detachCurrentMediaController() {
+        activeMediaController?.let { ctrl ->
+            activeMediaCallback?.let { cb ->
+                try {
+                    ctrl.unregisterCallback(cb)
+                    Log.d(TAG, "Unregistered callback from package: ${ctrl.packageName}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error unregistering media callback", e)
+                }
+            }
+        }
+        activeMediaController = null
+        activeMediaCallback = null
+    }
+
+    private fun attachMediaController(controller: MediaController) {
+        if (activeMediaController?.sessionToken == controller.sessionToken) {
+            updateMediaMetadata(controller.metadata)
+            updateMediaPlaybackState(controller.playbackState)
+            return
+        }
+
+        detachCurrentMediaController()
+
+        activeMediaController = controller
+        Log.d(TAG, "Attaching MediaController for package: ${controller.packageName}")
+
+        val callback = object : MediaController.Callback() {
             override fun onMetadataChanged(metadata: MediaMetadata?) {
+                Log.d(TAG, "onMetadataChanged received for ${controller.packageName}")
                 updateMediaMetadata(metadata)
             }
 
             override fun onPlaybackStateChanged(state: PlaybackState?) {
+                Log.d(TAG, "onPlaybackStateChanged: state=${state?.state} for ${controller.packageName}")
                 updateMediaPlaybackState(state)
             }
-        })
+        }
+
+        activeMediaCallback = callback
+        try {
+            controller.registerCallback(callback)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering MediaController callback", e)
+        }
+
+        updateMediaMetadata(controller.metadata)
+        updateMediaPlaybackState(controller.playbackState)
     }
 
     private fun updateMediaMetadata(metadata: MediaMetadata?) {
-        if (metadata == null) return
-        val title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "Unknown Title"
-        val artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "Unknown Artist"
+        val appName = activeMediaController?.packageName?.let { pkg ->
+            try {
+                val info = packageManager.getApplicationInfo(pkg, 0)
+                packageManager.getApplicationLabel(info).toString()
+            } catch (e: Exception) { pkg }
+        } ?: "Music Player"
+
+        if (metadata == null) {
+            Log.d(TAG, "Metadata is null, applying fallback media info")
+            mediaDataState = mediaDataState.copy(
+                title = if (mediaDataState.title.isEmpty() || mediaDataState.title == "No Media Playing") "Playing" else mediaDataState.title,
+                artist = if (mediaDataState.artist.isEmpty()) appName else mediaDataState.artist,
+                appName = appName
+            )
+            reevaluateCapsuleMode(CapsulePreferences.stateFlow.value)
+            return
+        }
+
+        val title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE)
+            ?: metadata.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
+            ?: "Playing"
+        val artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST)
+            ?: metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
+            ?: appName
         val album = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM) ?: ""
         val duration = metadata.getLong(MediaMetadata.METADATA_KEY_DURATION)
         val bitmap = metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: metadata.getBitmap(MediaMetadata.METADATA_KEY_ART)
 
-        val appName = activeMediaController?.packageName?.let { pkg ->
-            try {
-                val info = packageManager.getApplicationInfo(pkg, 0)
-                packageManager.getApplicationLabel(info).toString()
-            } catch (e: Exception) { null }
-        }
+        Log.d(TAG, "Updated metadata: title=$title, artist=$artist, app=$appName")
 
         mediaDataState = mediaDataState.copy(
             title = title,
@@ -250,14 +358,40 @@ class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
     }
 
     private fun updateMediaPlaybackState(state: PlaybackState?) {
-        val playing = state?.state == PlaybackState.STATE_PLAYING
+        val stateInt = state?.state ?: PlaybackState.STATE_NONE
+        val isPlaying = stateInt == PlaybackState.STATE_PLAYING
         val pos = state?.position ?: 0L
 
+        Log.d(TAG, "updateMediaPlaybackState: stateInt=$stateInt, isPlaying=$isPlaying")
+
+        val previousIsPlaying = mediaDataState.isPlaying
         mediaDataState = mediaDataState.copy(
-            isPlaying = playing,
+            isPlaying = isPlaying,
             positionMs = pos
         )
-        reevaluateCapsuleMode(CapsulePreferences.stateFlow.value)
+
+        val prefs = CapsulePreferences.stateFlow.value
+        if (isPlaying && (!previousIsPlaying || currentModeState != CapsuleMode.MEDIA)) {
+            Log.d(TAG, "Music playback active! Auto-expanding MEDIA capsule.")
+            currentModeState = CapsuleMode.MEDIA
+            isExpandedState = true
+            updateWindowFlags()
+            scheduleAutoCollapse(prefs.collapseDelay)
+        } else {
+            reevaluateCapsuleMode(prefs)
+        }
+    }
+
+    private fun isMediaActive(): Boolean {
+        val stateInt = activeMediaController?.playbackState?.state ?: PlaybackState.STATE_NONE
+        val isStateActive = stateInt == PlaybackState.STATE_PLAYING ||
+                stateInt == PlaybackState.STATE_PAUSED ||
+                stateInt == PlaybackState.STATE_BUFFERING ||
+                stateInt == PlaybackState.STATE_FAST_FORWARDING ||
+                stateInt == PlaybackState.STATE_REWINDING
+
+        return isStateActive || mediaDataState.isPlaying ||
+                (activeMediaController != null && mediaDataState.title.isNotEmpty() && mediaDataState.title != "No Media Playing")
     }
 
     private fun reevaluateCapsuleMode(prefs: CapsulePreferences.State) {
@@ -266,14 +400,15 @@ class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
         val timerData = DynamicCapsuleNotifListener.timerDataFlow.value
 
         currentModeState = when {
-            prefs.notificationEnabled && notifData != null -> CapsuleMode.NOTIFICATION
-            prefs.progressEnabled && progressData != null -> CapsuleMode.PROGRESS
-            prefs.timerEnabled && timerData != null -> CapsuleMode.TIMER
             prefs.volumeEnabled && currentModeState == CapsuleMode.VOLUME -> CapsuleMode.VOLUME
-            prefs.playerEnabled && (mediaDataState.isPlaying || mediaDataState.title != "No Media Playing") -> CapsuleMode.MEDIA
+            prefs.playerEnabled && isMediaActive() -> CapsuleMode.MEDIA
+            prefs.timerEnabled && timerData != null -> CapsuleMode.TIMER
+            prefs.progressEnabled && progressData != null -> CapsuleMode.PROGRESS
+            prefs.notificationEnabled && notifData != null -> CapsuleMode.NOTIFICATION
             else -> CapsuleMode.NONE
         }
 
+        Log.d(TAG, "reevaluateCapsuleMode: result=$currentModeState")
         updateWindowFlags()
     }
 
@@ -285,6 +420,8 @@ class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
     }
 
     private fun setupOverlayView() {
+        if (!Settings.canDrawOverlays(this)) return
+
         val flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
@@ -374,6 +511,25 @@ class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
                         },
                         onNotifActionClick = { intent ->
                             try { intent.send() } catch (e: Exception) { }
+                        },
+                        onSwipeDismiss = {
+                            Log.d(TAG, "User swiped right to dismiss capsule overlay")
+                            isExpandedState = false
+                            val dismissedMode = currentModeState
+                            when (dismissedMode) {
+                                CapsuleMode.MEDIA -> {
+                                    mediaDataState = MediaPlaybackData()
+                                }
+                                CapsuleMode.NOTIFICATION -> {
+                                    DynamicCapsuleNotifListener.clearNotifData()
+                                }
+                                CapsuleMode.PROGRESS -> {
+                                    DynamicCapsuleNotifListener.clearProgressData()
+                                }
+                                else -> {}
+                            }
+                            currentModeState = CapsuleMode.NONE
+                            updateWindowFlags()
                         }
                     )
                 }
@@ -383,7 +539,7 @@ class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
         try {
             windowManager?.addView(overlayView, layoutParams)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Error adding overlay view", e)
         }
     }
 
@@ -407,7 +563,7 @@ class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
         try {
             windowManager?.updateViewLayout(view, lp)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Error updating overlay window flags", e)
         }
     }
 
@@ -440,6 +596,8 @@ class DynamicCapsuleService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
         isServiceRunning = false
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         serviceScope.cancel()
+
+        detachCurrentMediaController()
 
         volumeReceiver?.let {
             try { unregisterReceiver(it) } catch (e: Exception) { }

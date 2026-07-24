@@ -16,9 +16,10 @@ fun WaveBackground(
     waveColor: Color,
     isPlaying: Boolean,
     isExpanded: Boolean,
+    isAnimated: Boolean = true,
     modifier: Modifier = Modifier
 ) {
-    val shouldAnimate = isPlaying && isExpanded
+    val shouldAnimate = isPlaying && isExpanded && isAnimated
 
     val infiniteTransition = rememberInfiniteTransition(label = "wave_animation")
     val phase1 by if (shouldAnimate) {
