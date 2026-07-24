@@ -302,43 +302,29 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
         setContent {
             MyApplicationTheme {
-                var currentScreen by remember { mutableStateOf("dashboard") }
-
-                when (currentScreen) {
-                    "player_control" -> {
-                        PlayerControlScreen(onBack = { currentScreen = "dashboard" })
-                    }
-                    "notif_settings" -> {
-                        NotificationSettingsScreen(onBack = { currentScreen = "dashboard" })
-                    }
-                    else -> {
-                        Scaffold(
-                            modifier = Modifier.fillMaxSize(),
-                            topBar = {
-                                CenterAlignedTopAppBar(
-                                    title = {
-                                        Text(
-                                            "VV Pixel Enhancer",
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.SansSerif
-                                        )
-                                    },
-                                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp)
-                                    )
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    topBar = {
+                        CenterAlignedTopAppBar(
+                            title = {
+                                Text(
+                                    "VV Pixel Enhancer",
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.SansSerif
                                 )
-                            }
-                        ) { innerPadding ->
-                            DashboardScreen(
-                                modifier = Modifier.padding(innerPadding),
-                                sensorX = sensorX.floatValue,
-                                sensorY = sensorY.floatValue,
-                                sensorZ = sensorZ.floatValue,
-                                onOpenPlayerCustomization = { currentScreen = "player_control" },
-                                onOpenNotificationCustomization = { currentScreen = "notif_settings" }
+                            },
+                            colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp)
                             )
-                        }
+                        )
                     }
+                ) { innerPadding ->
+                    DashboardScreen(
+                        modifier = Modifier.padding(innerPadding),
+                        sensorX = sensorX.floatValue,
+                        sensorY = sensorY.floatValue,
+                        sensorZ = sensorZ.floatValue
+                    )
                 }
             }
         }
@@ -657,9 +643,7 @@ fun DashboardScreen(
     modifier: Modifier = Modifier,
     sensorX: Float,
     sensorY: Float,
-    sensorZ: Float,
-    onOpenPlayerCustomization: () -> Unit = {},
-    onOpenNotificationCustomization: () -> Unit = {}
+    sensorZ: Float
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
@@ -929,12 +913,6 @@ fun DashboardScreen(
                 }
             }
         }
-
-        // ================= SECTION: DYNAMIC CAPSULE =================
-        DynamicCapsuleSettingsSection(
-            onOpenPlayerCustomization = onOpenPlayerCustomization,
-            onOpenNotificationCustomization = onOpenNotificationCustomization
-        )
 
         // ================= SECTION 2: QUICK SETTINGS =================
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
