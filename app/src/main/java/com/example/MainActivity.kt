@@ -48,7 +48,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.ui.theme.MyApplicationTheme
-import com.example.applock.AppLockSettingsScreen
 import kotlin.math.abs
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
@@ -662,23 +661,6 @@ fun DashboardScreen(
             }
         )
     }
-    var hasUsageAccess by remember {
-        mutableStateOf(
-            try {
-                val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? android.app.AppOpsManager
-                val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    appOps?.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
-                } else {
-                    @Suppress("DEPRECATION")
-                    appOps?.checkOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
-                }
-                mode == android.app.AppOpsManager.MODE_ALLOWED
-            } catch (e: Exception) {
-                false
-            }
-        )
-    }
-
 
     val sharedPrefs = remember(context) { context.getSharedPreferences("com.example.vvpixel.SETTINGS", Context.MODE_PRIVATE) }
     
@@ -719,18 +701,6 @@ fun DashboardScreen(
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 hasWriteSettings = Settings.System.canWrite(context)
                 hasOverlayPermission = Settings.canDrawOverlays(context)
-                hasUsageAccess = try {
-                    val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? android.app.AppOpsManager
-                    val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        appOps?.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        appOps?.checkOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
-                    }
-                    mode == android.app.AppOpsManager.MODE_ALLOWED
-                } catch (e: Exception) {
-                    false
-                }
                 isAccessibilityRunning = VVPixelAccessibilityService.isServiceRunning || isAccessibilityServiceEnabled(context)
                 isShakeTorchRunning = ShakeTorchService.isServiceRunning
                 
@@ -1334,10 +1304,7 @@ fun DashboardScreen(
             }
         }
 
-        // ================= SECTION 4: APP LOCK GATE =================
-        AppLockSettingsScreen()
-
-        // ================= SECTION 6: HOTSPOT CONNECTED DEVICES SCANNER =================
+        // ================= SECTION 4: HOTSPOT CONNECTED DEVICES SCANNER =================
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
                 text = "Hotspot Clients",
@@ -1848,16 +1815,6 @@ fun DashboardScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Divider()
-
-                        PermissionItem(
-                            title = "Grant Usage Access",
-                            description = "Required to detect when locked apps are opened or closed.",
-                            isGranted = hasUsageAccess,
-                            onRequestGrant = {
-                                val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-                                context.startActivity(intent)
-                            }
-                        )
 
                         PermissionItem(
                             title = "System Settings Writer",

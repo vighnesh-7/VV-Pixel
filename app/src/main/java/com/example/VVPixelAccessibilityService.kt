@@ -1,23 +1,18 @@
 package com.example
 
 import android.accessibilityservice.AccessibilityService
-import android.app.usage.UsageStatsManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import com.example.applock.AppLockActivity
 
 class VVPixelAccessibilityService : AccessibilityService() {
 
     private var isRegistered = false
-    private val handler = Handler(Looper.getMainLooper())
-    private var lastForegroundPackage: String? = null
+    private var lastHomeClickTime = 0L
 
     private fun triggerFeedback() {
         try {
@@ -68,14 +63,6 @@ class VVPixelAccessibilityService : AccessibilityService() {
         }
     }
 
-    private val screenOffReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == Intent.ACTION_SCREEN_OFF) {
-                sessionUnlocked.clear()
-            }
-        }
-    }
-
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.d(TAG, "VV Pixel Accessibility Service Connected.")
@@ -95,22 +82,13 @@ class VVPixelAccessibilityService : AccessibilityService() {
             registerReceiver(ringerReceiver, ringerFilter)
         }
 
-        val screenOffFilter = IntentFilter(Intent.ACTION_SCREEN_OFF)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(screenOffReceiver, screenOffFilter, RECEIVER_EXPORTED)
-        } else {
-            registerReceiver(screenOffReceiver, screenOffFilter)
-        }
-
         isServiceRunning = true
     }
-
-    private var lastHomeClickTime = 0L
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val evt = event ?: return
 
-        // 1. Double tap home to lock gesture detection
+        // Double tap home/launcher area to lock screen
         if (evt.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
             val pkg = evt.packageName?.toString() ?: ""
             if (pkg.contains("launcher") || pkg.contains("nexuslauncher")) {
@@ -133,66 +111,6 @@ class VVPixelAccessibilityService : AccessibilityService() {
                 }
             }
         }
-
-        // 2. App Lock Gate Interception
-        if (evt.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            val packageName = evt.packageName?.toString() ?: return
-
-            // Ignore system UI and self
-            if (packageName == this.packageName || packageName.contains("systemui") || packageName.contains("launcher") || packageName.contains("nexuslauncher")) {
-                scheduleRelockCheck()
-                return
-            }
-
-            val prefs = getSharedPreferences("com.example.vvpixel.SETTINGS", Context.MODE_PRIVATE)
-            val isMasterEnabled = prefs.getBoolean("app_lock_master_enabled", false)
-            val lockedPackages = prefs.getStringSet("app_lock_locked_packages", emptySet()) ?: emptySet()
-
-            if (!isMasterEnabled || !lockedPackages.contains(packageName)) {
-                lastForegroundPackage = packageName
-                return
-            }
-
-            if (sessionUnlocked.contains(packageName)) {
-                lastForegroundPackage = packageName
-                return
-            }
-
-            // Launch App Lock Gate
-            lastForegroundPackage = packageName
-            launchAppLockGate(packageName)
-        }
-    }
-
-    private fun launchAppLockGate(targetPackage: String) {
-        performGlobalAction(GLOBAL_ACTION_HOME)
-        handler.postDelayed({
-            val intent = Intent(this, AppLockActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra("TARGET_PACKAGE", targetPackage)
-            }
-            startActivity(intent)
-        }, 150)
-    }
-
-    private fun scheduleRelockCheck() {
-        val checkRunnable = Runnable {
-            try {
-                val am = getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-                val runningProcesses = am?.runningAppProcesses?.map { it.processName }?.toSet() ?: emptySet()
-
-                sessionUnlocked.toList().forEach { pkg ->
-                    val isRunning = runningProcesses.any { it == pkg || it.startsWith("$pkg:") }
-                    if (!isRunning) {
-                        sessionUnlocked.remove(pkg)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Relock check error", e)
-            }
-        }
-        handler.postDelayed(checkRunnable, 300)
-        handler.postDelayed(checkRunnable, 1500)
     }
 
     override fun onInterrupt() {}
@@ -203,7 +121,6 @@ class VVPixelAccessibilityService : AccessibilityService() {
         if (isRegistered) {
             try { unregisterReceiver(receiver) } catch (e: Exception) {}
             try { unregisterReceiver(ringerReceiver) } catch (e: Exception) {}
-            try { unregisterReceiver(screenOffReceiver) } catch (e: Exception) {}
             isRegistered = false
         }
         isServiceRunning = false
@@ -213,17 +130,5 @@ class VVPixelAccessibilityService : AccessibilityService() {
         private const val TAG = "VVPixelAccessService"
         const val ACTION_LOCK = "com.example.vvpixel.ACTION_LOCK"
         var isServiceRunning = false
-        val sessionUnlocked = mutableSetOf<String>()
-
-        fun notifyAppUnlocked(packageName: String, context: Context) {
-            if (packageName.isNotBlank()) {
-                sessionUnlocked.add(packageName)
-                val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
-                launchIntent?.let {
-                    it.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    context.startActivity(it)
-                }
-            }
-        }
     }
 }
