@@ -1,4 +1,9 @@
 <resources>
     <string name="app_name">VV Pixel</string>
-    <string name="accessibility_desc">Enables VV Pixel widgets and double-tap gestures to securely trigger system-level lock screen action preserving face and fingerprint biometric unlocking.</string>
+    <string name="accessibility_desc">Enables VV Pixel widgets, double-tap lock gestures, and one-tap 5G/LTE network preference switching securely without root.</string>
+    <string name="network_tile_label">5G / LTE</string>
+    <string name="network_toggle_widget_label">VV 5G / LTE Toggle</string>
+    <string name="network_toggle_widget_desc">Toggle preferred mobile network between 5G and LTE</string>
+    <string name="network_shortcut_short_label">5G / LTE</string>
+    <string name="network_shortcut_long_label">Toggle 5G / LTE</string>
 </resources>

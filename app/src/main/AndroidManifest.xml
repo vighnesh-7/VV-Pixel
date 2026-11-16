@@ -14,6 +14,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <queries>
         <intent>
@@ -94,6 +95,20 @@
 
         <!-- Quick Settings Tiles -->
         <service
+            android:name=".AccessibilityMasterTileService"
+            android:icon="@drawable/ic_a11y_tile"
+            android:label="VV Features"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
+        <service
             android:name=".AdaptiveBrightnessTileService"
             android:icon="@drawable/ic_brightness_auto"
             android:label="Adaptive Brightness"
@@ -138,6 +153,36 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+
+        <service
+            android:name=".NetworkModeTileService"
+            android:icon="@drawable/ic_network_5g"
+            android:label="@string/network_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
+        <!-- Dynamic 5G / LTE Toggle Trampoline & Pinned Shortcut Activity -->
+        <activity
+            android:name=".NetworkModeToggleActivity"
+            android:theme="@style/Theme.TranslucentActivity"
+            android:exported="true"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:noHistory="true"
+            android:label="@string/network_shortcut_long_label">
+            <intent-filter>
+                <action android:name="com.example.vvpixel.ACTION_TOGGLE_NETWORK_MODE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
         <!-- Dynamic Ringer Mode Dialog/Overlay Activity -->
         <activity
@@ -210,6 +255,18 @@
                 android:resource="@xml/ringer_widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".NetworkModeWidget"
+            android:label="@string/network_toggle_widget_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/network_mode_widget_info" />
+        </receiver>
+
         <!-- Doodle Clock Widgets -->
         <receiver
             android:name=".DoodleFaceClockWidget"
@@ -269,6 +326,17 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/liquid_glass_widget_info" />
+        </receiver>
+
+        <!-- Boot and Package Update Receiver for Background Gesture Services -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
         </receiver>
 
     </application>

@@ -4,9 +4,7 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- Beautiful custom 8-pointed star (Lakshmi/octagram overlapping squares) with precise letter 'A' cutout -->
     <path
         android:fillColor="#FFFFFF"
-        android:fillType="evenOdd"
-        android:pathData="M12,2.1 L14.9,5 L19,5 L19,9.1 L21.9,12 L19,14.9 L19,19 L14.9,19 L12,21.9 L9.1,19 L5,19 L5,14.9 L2.1,12 L5,9.1 L5,5 L9.1,5 Z M10.8,8 L8,16.5 L9.9,16.5 L10.6,14.3 H13.4 L14.1,16.5 H16 L13.2,8 H10.8 Z M11.1,12.7 L12,9.7 L12.9,12.7 Z" />
+        android:pathData="M7.8,16H9.4l0.8-2.3h3.65l0.8,2.3H16.2L12.8,7H11.2L7.8,16Zm2.85-3.6l1.3-3.75h0.1l1.3,3.75h-2.7ZM12,23.3L8.65,20H4V15.35L0.7,12L4,8.65V4H8.65L12,0.7L15.35,4H20V8.65L23.3,12L20,15.35V20H15.35L12,23.3Zm0-2.8L14.5,18H18V14.5L20.5,12L18,9.5V6H14.5L12,3.5L9.5,6H6V9.5L3.5,12L6,14.5V18H9.5L12,20.5ZM12,12Z" />
 </vector>

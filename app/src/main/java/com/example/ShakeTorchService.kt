@@ -142,6 +142,8 @@ class ShakeTorchService : Service(), SensorEventListener {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "ShakeTorchService Started running")
         if (intent?.action == ACTION_STOP) {
+            val prefs = getSharedPreferences("com.example.vvpixel.SETTINGS", Context.MODE_PRIVATE)
+            prefs.edit().putBoolean("shake_torch_enabled", false).apply()
             stopSelf()
             return START_NOT_STICKY
         }
@@ -354,5 +356,38 @@ class ShakeTorchService : Service(), SensorEventListener {
 
         const val ACTION_STOP = "com.example.vvpixel.ACTION_STOP"
         var isServiceRunning = false
+
+        fun isEnabledInPrefs(context: Context): Boolean {
+            val prefs = context.getSharedPreferences("com.example.vvpixel.SETTINGS", Context.MODE_PRIVATE)
+            return prefs.getBoolean("shake_torch_enabled", false)
+        }
+
+        fun startService(context: Context) {
+            try {
+                val intent = Intent(context, ShakeTorchService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start ShakeTorchService", e)
+            }
+        }
+
+        fun stopService(context: Context) {
+            try {
+                val intent = Intent(context, ShakeTorchService::class.java)
+                context.stopService(intent)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to stop ShakeTorchService", e)
+            }
+        }
+
+        fun startServiceIfEnabled(context: Context) {
+            if (isEnabledInPrefs(context)) {
+                startService(context)
+            }
+        }
     }
 }

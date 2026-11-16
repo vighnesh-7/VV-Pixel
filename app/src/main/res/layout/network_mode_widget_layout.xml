@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_network_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="6dp">
+
+    <FrameLayout
+        android:id="@+id/btn_network_toggle"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="center"
+        android:background="@drawable/network_widget_bg_5g"
+        android:clickable="true"
+        android:focusable="true">
+
+        <ImageView
+            android:id="@+id/img_network_mode"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:contentDescription="@string/network_toggle_widget_desc"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_network_5g"
+            android:tint="@color/widget_btn_active_icon" />
+    </FrameLayout>
+
+</FrameLayout>

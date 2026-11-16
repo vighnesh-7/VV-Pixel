@@ -16,18 +16,25 @@ import android.content.ComponentName
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.os.VibrationEffect
+import android.os.SystemClock
 import android.provider.Settings
 import android.widget.Toast
+import android.service.quicksettings.TileService
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -38,8 +45,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import android.content.SharedPreferences
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -630,12 +639,39 @@ suspend fun scanHotspotSubnet(
 }
 
 private fun isAccessibilityServiceEnabled(context: Context): Boolean {
-    val service = "${context.packageName}/${VVPixelAccessibilityService::class.java.name}"
-    val enabledServices = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-    ) ?: return false
-    return enabledServices.contains(service)
+    return VVPixelAccessibilityService.isServiceEnabledInSystem(context)
+}
+
+private fun previewLockVibration(context: Context, intensity: Float) {
+    try {
+        val duration = (10 + (intensity * 40)).toLong()
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+            vibratorManager?.defaultVibrator ?: (context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+        vibrator?.let {
+            if (it.hasVibrator()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val amplitude = (50 + (intensity * 205)).toInt().coerceIn(1, 255)
+                    try {
+                        it.vibrate(VibrationEffect.createOneShot(duration, amplitude))
+                    } catch (e: Exception) {
+                        try { it.vibrate(duration) } catch (ex: Exception) {}
+                    }
+                } else {
+                    @Suppress("DEPRECATION")
+                    try {
+                        it.vibrate(duration)
+                    } catch (ex: Exception) {}
+                }
+            }
+        }
+    } catch (e: Exception) {
+        android.util.Log.e("MainActivity", "Error in previewLockVibration", e)
+    }
 }
 
 @Composable
@@ -684,7 +720,14 @@ fun DashboardScreen(
 
     var isDoubleTapEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("double_tap_to_lock_enabled", true)) }
     var isLockVibrationEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("lock_vibration_enabled", true)) }
-    var isShakeTorchEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("shake_torch_enabled", true)) }
+    var lockVibrationIntensity by remember { mutableStateOf(sharedPrefs.getFloat("lock_vibration_intensity", 0.5f)) }
+    var lastVibratePreviewTime by remember { mutableLongStateOf(0L) }
+    var isShakeTorchEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("shake_torch_enabled", false)) }
+    var isMasterFeaturesEnabled by remember { mutableStateOf(AccessibilityMasterState.isEnabled(context)) }
+    var autoDisableOnAppsEnabled by remember { mutableStateOf(AccessibilityMasterState.isAutoDisableOnAppsEnabled(context)) }
+    var autoDisablePackages by remember { mutableStateOf(AccessibilityMasterState.getAutoDisablePackages(context)) }
+    var showAppPickerBottomSheet by remember { mutableStateOf(false) }
+    var networkModePref by remember { mutableStateOf(NetworkToggleManager.getSavedMode(context)) }
 
     // Checking of background services state
     var isAccessibilityRunning by remember {
@@ -692,7 +735,24 @@ fun DashboardScreen(
     }
     var isShakeTorchRunning by remember { mutableStateOf(ShakeTorchService.isServiceRunning) }
 
+    LaunchedEffect(Unit) {
+        if (sharedPrefs.getBoolean("shake_torch_enabled", false)) {
+            ShakeTorchService.startService(context)
+        }
+    }
 
+    // Listen for live SharedPreferences updates (e.g., 5G/LTE toggle completion)
+    DisposableEffect(sharedPrefs) {
+        val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == NetworkToggleManager.KEY_NETWORK_MODE) {
+                networkModePref = NetworkToggleManager.getSavedMode(context)
+            }
+        }
+        sharedPrefs.registerOnSharedPreferenceChangeListener(prefListener)
+        onDispose {
+            sharedPrefs.unregisterOnSharedPreferenceChangeListener(prefListener)
+        }
+    }
 
     // Refresh states instantly when window becomes active/resumed
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -702,7 +762,18 @@ fun DashboardScreen(
                 hasWriteSettings = Settings.System.canWrite(context)
                 hasOverlayPermission = Settings.canDrawOverlays(context)
                 isAccessibilityRunning = VVPixelAccessibilityService.isServiceRunning || isAccessibilityServiceEnabled(context)
-                isShakeTorchRunning = ShakeTorchService.isServiceRunning
+                networkModePref = NetworkToggleManager.getSavedMode(context)
+                
+                val torchPref = sharedPrefs.getBoolean("shake_torch_enabled", false)
+                isShakeTorchEnabled = torchPref
+                if (torchPref && !ShakeTorchService.isServiceRunning) {
+                    ShakeTorchService.startService(context)
+                }
+                isShakeTorchRunning = ShakeTorchService.isServiceRunning || torchPref
+
+                isMasterFeaturesEnabled = AccessibilityMasterState.isEnabled(context)
+                autoDisableOnAppsEnabled = AccessibilityMasterState.isAutoDisableOnAppsEnabled(context)
+                autoDisablePackages = AccessibilityMasterState.getAutoDisablePackages(context)
                 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
@@ -758,10 +829,10 @@ fun DashboardScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // ================= SECTION 1: LOCK =================
+        // ================= SECTION 1: ACCESSIBILITY =================
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
-                text = "Lock & Security",
+                text = "Accessibility",
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -769,10 +840,306 @@ fun DashboardScreen(
                 modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
             )
 
-            // Double Tap to Lock Card (First)
+            // Master Features Kill Switch
+            val isA11yActive = isAccessibilityRunning && isMasterFeaturesEnabled
+            PixelEnhancerCard(
+                title = "VV Pixel Features",
+                subtitle = if (isA11yActive) "Active • Quick pause/kill-switch" else if (!isAccessibilityRunning) "Service Disabled in Settings • Tap to enable" else "Paused • All features functionally inert",
+                icon = if (isA11yActive) Icons.Default.CheckCircle else Icons.Default.Warning,
+                rightElement = {
+                    Switch(
+                        checked = isA11yActive,
+                        onCheckedChange = { checked ->
+                            isMasterFeaturesEnabled = checked
+                            AccessibilityMasterState.setEnabled(context, checked)
+                            if (!checked) {
+                                VVPixelAccessibilityService.disableCurrentService(context)
+                                isAccessibilityRunning = VVPixelAccessibilityService.isServiceRunning || isAccessibilityServiceEnabled(context)
+                            } else {
+                                if (!isAccessibilityServiceEnabled(context)) {
+                                    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                    context.startActivity(intent)
+                                }
+                            }
+                            AccessibilityMasterTileService.requestRefresh(context)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    )
+                }
+            )
+
+            // Auto-Disable on Target Banking / Sensitive Apps Card
+            Card(
+                onClick = { showAppPickerBottomSheet = true },
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = "Auto-Disable Apps",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(14.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Auto disable accessibility",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Switch(
+                            checked = autoDisableOnAppsEnabled,
+                            onCheckedChange = { checked ->
+                                autoDisableOnAppsEnabled = checked
+                                AccessibilityMasterState.setAutoDisableOnAppsEnabled(context, checked)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                            )
+                        )
+                    }
+
+                    FilledTonalButton(
+                        onClick = { showAppPickerBottomSheet = true },
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Apps,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Manage Target apps [${autoDisablePackages.size}]",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                    }
+                }
+            }
+        }
+
+        // ================= SECTION 2: GESTURES =================
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = "Gestures",
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+            )
+
+            // Shake to Toggle Torch Card (Now using semantic flashlight Lightbulb icon)
+            PixelEnhancerCard(
+                title = "Shake to Toggle Torch",
+                subtitle = if (isShakeTorchEnabled) "Active — shake to toggle" else "Disabled — shake to toggle",
+                icon = Icons.Default.Lightbulb,
+                rightElement = {
+                    Switch(
+                        checked = isShakeTorchEnabled,
+                        onCheckedChange = { enable ->
+                            isShakeTorchEnabled = enable
+                            sharedPrefs.edit().putBoolean("shake_torch_enabled", enable).apply()
+
+                            if (enable) {
+                                ShakeTorchService.startService(context)
+                                isShakeTorchRunning = true
+                            } else {
+                                ShakeTorchService.stopService(context)
+                                isShakeTorchRunning = false
+                            }
+                        }
+                    )
+                }
+            )
+
+            // Interactive Shake Force Visualizer
+            AnimatedVisibility(visible = isShakeTorchEnabled) {
+                var shakeThreshold by remember { mutableStateOf(sharedPrefs.getFloat("shake_torch_threshold", 12.0f)) }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Real-time Force Sensor Vector",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(16.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Gray.copy(alpha = 0.2f))
+                        ) {
+                            val widthPercentage = (abs(sensorX) / 20.0f).coerceIn(0f, 1f)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(widthPercentage)
+                                    .background(if (abs(sensorX) > shakeThreshold) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary)
+                            )
+                        }
+
+                        Text(
+                            text = "Shake Threshold Intensity: ${String.format("%.1f m/s²", shakeThreshold)}",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                        Slider(
+                            value = shakeThreshold,
+                            onValueChange = { newValue ->
+                                shakeThreshold = newValue
+                                sharedPrefs.edit().putFloat("shake_torch_threshold", newValue).apply()
+                            },
+                            valueRange = 8.0f..22.0f,
+                            steps = 14
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Current Accel: ${String.format("%.2f m/s²", sensorX)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                            )
+                            Text(
+                                text = "Trigger Target: ${String.format("%.2f m/s²", shakeThreshold)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ================= SECTION 3: QUICK SETTINGS =================
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = "Quick Settings Tiles",
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+            )
+
+            // Tile Info Item 1: VV Features Tile (Accessibility Master)
+            PixelEnhancerTileInfoCard(
+                title = "VV Features tile",
+                subtitle = "Quick toggle to kill the accessibility",
+                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_a11y_tile)
+            )
+
+            // Tile Info Item 2: Ringer Mode
+            PixelEnhancerTileInfoCard(
+                title = "Ringer Mode Tile",
+                subtitle = "Tap to cycle through Sound, Vibrate, and Silent modes",
+                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_unmute)
+            )
+
+            // Tile Info Item 3: Adaptive Brightness
+            PixelEnhancerTileInfoCard(
+                title = "Adaptive Brightness Tile",
+                subtitle = "Automatically calibrate and match ambient screen luminance levels",
+                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_brightness_auto)
+            )
+
+            // Tile Info Item 4: Volume QS Tile
+            PixelEnhancerTileInfoCard(
+                title = "Volume QS Tile",
+                subtitle = "Tap to expand a custom visual slider board for media and ring levels",
+                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_volume_equalizer)
+            )
+
+            // Tile Info Item 5: Caffeinate Tile
+            PixelEnhancerTileInfoCard(
+                title = "Caffeinate Tile",
+                subtitle = "Keep screen awake and bypass automatic sleep/lock indefinitely",
+                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_coffee)
+            )
+
+            // Tile Info Item 6: 5G / LTE Network Tile
+            PixelEnhancerTileInfoCard(
+                title = "5G / LTE Network Tile",
+                subtitle = "One-tap QS toggle for active data SIM (${networkModePref.label} synced)",
+                iconPainter = androidx.compose.ui.res.painterResource(
+                    id = if (networkModePref == NetworkToggleManager.NetworkMode.FIVE_G) {
+                        R.drawable.ic_network_5g
+                    } else {
+                        R.drawable.ic_network_lte
+                    }
+                )
+            )
+        }
+
+        // ================= SECTION 4: WIDGETS =================
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                text = "Widgets",
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
+            )
+
+            // Double Tap to Lock Card
             PixelEnhancerCard(
                 title = "Double-Tap to Lock",
-                subtitle = "Pins the lock launcher. Double-tap to secure device instantly.",
+                subtitle = "Transparent span area to lock the phone",
                 icon = Icons.Default.Lock,
                 rightElement = {
                     FilledTonalButton(
@@ -791,10 +1158,10 @@ fun DashboardScreen(
                 }
             )
 
-            // Lock Widget 1x1 (Second)
+            // Lock Widget 1x1
             PixelEnhancerCard(
                 title = "Lock Widget",
-                subtitle = "Long-press homescreen → Widgets",
+                subtitle = "",
                 icon = Icons.Default.Lock,
                 rightElement = {
                     FilledTonalButton(
@@ -813,9 +1180,7 @@ fun DashboardScreen(
                 }
             )
 
-            // Subtle Vibration Lock with Slider (Third)
-            var lockVibrationIntensity by remember { mutableStateOf(sharedPrefs.getFloat("lock_vibration_intensity", 0.5f)) }
-
+            // Subtle Vibration Lock with Slider
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
@@ -867,6 +1232,9 @@ fun DashboardScreen(
                             onCheckedChange = { enable ->
                                 isLockVibrationEnabled = enable
                                 sharedPrefs.edit().putBoolean("lock_vibration_enabled", enable).apply()
+                                if (enable) {
+                                    previewLockVibration(context, lockVibrationIntensity)
+                                }
                             }
                         )
                     }
@@ -903,6 +1271,14 @@ fun DashboardScreen(
                                 onValueChange = { newValue ->
                                     lockVibrationIntensity = newValue
                                     sharedPrefs.edit().putFloat("lock_vibration_intensity", newValue).apply()
+                                    val now = SystemClock.uptimeMillis()
+                                    if (now - lastVibratePreviewTime >= 100L) {
+                                        lastVibratePreviewTime = now
+                                        previewLockVibration(context, newValue)
+                                    }
+                                },
+                                onValueChangeFinished = {
+                                    previewLockVibration(context, lockVibrationIntensity)
                                 },
                                 valueRange = 0.1f..1.0f,
                                 modifier = Modifier.fillMaxWidth()
@@ -911,64 +1287,12 @@ fun DashboardScreen(
                     }
                 }
             }
-        }
-
-        // ================= SECTION 2: QUICK SETTINGS =================
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                text = "Quick Settings Tiles",
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                ),
-                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-            )
-
-            // Tile Info Item 2: Ringer Mode
-            PixelEnhancerTileInfoCard(
-                title = "Ringer Mode Tile",
-                subtitle = "Tap to cycle through Sound, Vibrate, and Silent modes",
-                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_unmute)
-            )
-
-            // Tile Info Item 3: Adaptive Brightness
-            PixelEnhancerTileInfoCard(
-                title = "Adaptive Brightness Tile",
-                subtitle = "Automatically calibrate and match ambient screen luminance levels",
-                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_brightness_auto)
-            )
-
-            // Tile Info Item 4: Volume QS Tile
-            PixelEnhancerTileInfoCard(
-                title = "Volume QS Tile",
-                subtitle = "Tap to expand a custom visual slider board for media and ring levels",
-                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_volume_equalizer)
-            )
-
-            // Tile Info Item 5: Caffeinate Tile
-            PixelEnhancerTileInfoCard(
-                title = "Caffeinate Tile",
-                subtitle = "Keep screen awake and bypass automatic sleep/lock indefinitely",
-                iconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_coffee)
-            )
-        }
-
-        // ================= SECTION 3: WIDGETS =================
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(
-                text = "Widgets",
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                ),
-                modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
-            )
 
             // Calculator Widget
             PixelEnhancerCard(
                 title = "Calculator Widget",
                 subtitle = "Long-press homescreen → Widgets",
-                icon = Icons.Default.Add,
+                iconPainter = painterResource(id = R.drawable.ic_calculator),
                 rightElement = {
                     FilledTonalButton(
                         onClick = {
@@ -1007,6 +1331,133 @@ fun DashboardScreen(
                     }
                 }
             )
+
+            // 5G / LTE Network Switch Widget & Pinned Shortcut Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(
+                                    id = if (networkModePref == NetworkToggleManager.NetworkMode.FIVE_G) {
+                                        R.drawable.ic_network_5g
+                                    } else {
+                                        R.drawable.ic_network_lte
+                                    }
+                                ),
+                                contentDescription = "5G or LTE Network Mode",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "5G / LTE Network Switch",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Active data SIM • 1x1 live icon (${networkModePref.label})",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        ) {
+                            Text(
+                                text = networkModePref.label,
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val intent = NetworkToggleManager.prepareToggleAndBuildLaunchIntent(
+                                    context,
+                                    NetworkToggleManager.TargetMode.AUTO_TOGGLE
+                                )
+                                context.startActivity(intent)
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .testTag("network_toggle_now_button"),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
+                        ) {
+                            Text(
+                                text = if (networkModePref == NetworkToggleManager.NetworkMode.FIVE_G) {
+                                    "Switch to LTE"
+                                } else {
+                                    "Switch to 5G"
+                                },
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+
+                        FilledTonalButton(
+                            onClick = {
+                                NetworkToggleManager.pinHomeShortcut(context)
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .testTag("pin_network_shortcut_button"),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                        ) {
+                            Text("Shortcut", style = MaterialTheme.typography.labelLarge)
+                        }
+
+                        FilledTonalButton(
+                            onClick = {
+                                requestPinWidget(NetworkModeWidget::class.java, "1x1 5G/LTE Toggle")
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .testTag("add_network_widget_button"),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                        ) {
+                            Text("1x1 Widget", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -1197,114 +1648,7 @@ fun DashboardScreen(
             }
         }
 
-        // ================= SECTION 4: GESTURES =================
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                text = "Gestures",
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                ),
-                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-            )
-
-            // Shake to Toggle Torch Card (Now using semantic flashlight Lightbulb icon)
-            PixelEnhancerCard(
-                title = "Shake to Toggle Torch",
-                subtitle = if (isShakeTorchRunning && isShakeTorchEnabled) "Active — shake to toggle" else "Disabled — shake to toggle",
-                icon = Icons.Default.Lightbulb,
-                rightElement = {
-                    Switch(
-                        checked = isShakeTorchEnabled && isShakeTorchRunning,
-                        onCheckedChange = { enable ->
-                            isShakeTorchEnabled = enable
-                            sharedPrefs.edit().putBoolean("shake_torch_enabled", enable).apply()
-
-                            val intent = Intent(context, ShakeTorchService::class.java)
-                            if (enable) {
-                                context.startForegroundService(intent)
-                            } else {
-                                context.stopService(intent)
-                            }
-                            isShakeTorchRunning = enable
-                        }
-                    )
-                }
-            )
-
-            // Interactive Shake Force Visualizer
-            AnimatedVisibility(visible = isShakeTorchEnabled && isShakeTorchRunning) {
-                var shakeThreshold by remember { mutableStateOf(sharedPrefs.getFloat("shake_torch_threshold", 12.0f)) }
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "Real-time Force Sensor Vector",
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(16.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color.Gray.copy(alpha = 0.2f))
-                        ) {
-                            val widthPercentage = (abs(sensorX) / 20.0f).coerceIn(0f, 1f)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .fillMaxWidth(widthPercentage)
-                                    .background(if (abs(sensorX) > shakeThreshold) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary)
-                            )
-                        }
-
-                        Text(
-                            text = "Shake Threshold Intensity: ${String.format("%.1f m/s²", shakeThreshold)}",
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                        Slider(
-                            value = shakeThreshold,
-                            onValueChange = { newValue ->
-                                shakeThreshold = newValue
-                                sharedPrefs.edit().putFloat("shake_torch_threshold", newValue).apply()
-                            },
-                            valueRange = 8.0f..22.0f,
-                            steps = 14
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "Current Accel: ${String.format("%.2f m/s²", sensorX)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-                            )
-                            Text(
-                                text = "Trigger Target: ${String.format("%.2f m/s²", shakeThreshold)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // ================= SECTION 4: HOTSPOT CONNECTED DEVICES SCANNER =================
+        // ================= SECTION 5: HOTSPOT CONNECTED DEVICES SCANNER =================
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
                 text = "Hotspot Clients",
@@ -1817,6 +2161,16 @@ fun DashboardScreen(
                         Divider()
 
                         PermissionItem(
+                            title = "Accessibility Service",
+                            description = "Required for launcher double-tap to lock screen and gesture actions.",
+                            isGranted = isAccessibilityRunning,
+                            onRequestGrant = {
+                                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                context.startActivity(intent)
+                            }
+                        )
+
+                        PermissionItem(
                             title = "System Settings Writer",
                             description = "Required to adjust screen brightness and display preferences.",
                             isGranted = hasWriteSettings,
@@ -1864,6 +2218,17 @@ fun DashboardScreen(
                     fontFamily = FontFamily.Monospace
                 ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+        }
+
+        if (showAppPickerBottomSheet) {
+            AppPickerBottomSheet(
+                initialSelectedPackages = autoDisablePackages,
+                onDismiss = { showAppPickerBottomSheet = false },
+                onSaveSelection = { updatedSet ->
+                    autoDisablePackages = updatedSet
+                    AccessibilityMasterState.setAutoDisablePackages(context, updatedSet)
+                }
             )
         }
 
@@ -1930,12 +2295,14 @@ fun PixelEnhancerCard(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     )
-                )
+                }
             }
             
             Spacer(modifier = Modifier.width(12.dp))
